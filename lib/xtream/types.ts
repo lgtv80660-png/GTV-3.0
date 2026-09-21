@@ -1,33 +1,13 @@
-export type StreamKind = "live" | "movie" | "series";
+﻿export type StreamKind = "live" | "movie" | "series";
 
-export interface UserInfo {
-  username: string;
-  password?: string;
-  message?: string;
-  auth?: number;
-  status?: string;
-  exp_date?: string;
-  is_trial?: string;
-  active_cons?: string;
-  created_at?: string;
-  max_connections?: string;
-  allowed_output_formats?: string[];
-}
-
-export interface ServerInfo {
+export interface XtreamCredentials {
+  baseUrl?: string;
   url?: string;
-  port?: string;
-  https_port?: string;
-  server_protocol?: string;
-  rtmp_port?: string;
-  timezone?: string;
-  timestamp_now?: number;
-  time_now?: string;
-}
-
-export interface AuthResponse {
-  user_info?: UserInfo;
-  server_info?: ServerInfo;
+  serverUrl?: string;
+  username?: string;
+  user?: string;
+  password?: string;
+  pass?: string;
 }
 
 export interface Category {
@@ -36,71 +16,33 @@ export interface Category {
   parent_id?: number;
 }
 
-export interface LiveStream {
-  num?: number;
-  name: string;
-  stream_type?: string;
-  stream_id: number;
-  stream_icon?: string;
-  epg_channel_id?: string;
-  added?: string;
-  category_id?: string;
-  custom_sid?: string;
-  tv_archive?: number;
-  direct_source?: string;
-  tv_archive_duration?: number;
-}
+export type VodCategory = Category;
+export type SeriesCategory = Category;
+export type LiveCategory = Category;
 
 export interface VodStream {
-  num?: number;
-  name: string;
-  stream_type?: string;
-  stream_id: number;
+  stream_id: number | string;
+  name?: string;
+  title?: string;
   stream_icon?: string;
-  rating?: string | number;
-  added?: string;
-  category_id?: string;
+  cover?: string;
   container_extension?: string;
-  custom_sid?: string;
-  direct_source?: string;
+  rating?: string | number;
+  year?: string | number;
+  added?: string | number;
+  category_id?: string;
 }
 
-export interface VodInfo {
-  info?: {
-    movie_image?: string;
-    cover_big?: string;
-    cover?: string;
-    stream_icon?: string;
-    duration_secs?: number;
-    duration?: string;
-    name?: string;
-    rating?: string | number;
-    releasedate?: string;
-    genre?: string;
-    plot?: string;
-    description?: string;
-    director?: string;
-    cast?: string;
-    youtube_trailer?: string;
-  };
-  movie_data?: {
-    stream_id?: number;
-    name?: string;
-    container_extension?: string;
-  };
-}
-
-export interface Series {
-  num?: number;
-  name: string;
-  series_id: number;
+export interface SeriesItem {
+  series_id: number | string;
+  name?: string;
+  title?: string;
   cover?: string;
   plot?: string;
   cast?: string;
   director?: string;
   genre?: string;
   releaseDate?: string;
-  last_modified?: string;
   rating?: string | number;
   category_id?: string;
 }
@@ -111,36 +53,14 @@ export interface Episode {
   title?: string;
   container_extension?: string;
   info?: {
-    duration_secs?: number;
-    duration?: string;
     movie_image?: string;
-  };
-}
-
-export interface SeriesInfo {
-  info?: {
-    name?: string;
-    cover?: string;
     plot?: string;
-    cast?: string;
-    director?: string;
-    genre?: string;
-    releaseDate?: string;
-    rating?: string | number;
-    youtube_trailer?: string;
+    duration?: string;
+    duration_secs?: number;
   };
-  episodes?: Record<string, Episode[]>;
 }
 
-export interface EpgListing {
-  id?: string;
-  epg_id?: string;
-  title?: string;
-  lang?: string;
-  start?: string;
-  end?: string;
-  description?: string;
-  channel_id?: string;
-  start_timestamp?: number;
-  stop_timestamp?: number;
+export interface SeriesDetails {
+  info?: SeriesItem;
+  episodes?: Record<string, Episode[]>;
 }
