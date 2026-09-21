@@ -1,52 +1,89 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Hôte Xtream sécurisé côté serveur (Totalement masqué pour le client)
-const XTREAM_HOST = process.env.XTREAM_HOST || "https://gmztv.vercel.app";
+import { requireSession } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const username = searchParams.get("username");
-  const password = searchParams.get("password");
-  const action = searchParams.get("action");
-  const categoryId = searchParams.get("category_id");
-
-  if (!username || !password) {
-    return NextResponse.json(
-      { error: "Identifiant et mot de passe requis" },
-      { status: 400 }
-    );
-  }
-
   try {
-    let targetUrl = `${XTREAM_HOST}/player_api.php?username=${encodeURIComponent(
-      username
-    )}&password=${encodeURIComponent(password)}`;
+    const creds = await requireSession();
+    const { searchParams } = new URL(request.url);
 
-    if (action && action !== "auth") {
-      targetUrl += `&action=${action}`;
-      if (categoryId) targetUrl += `&category_id=${categoryId}`;
+    const action = searchParams.get("action");
+    const categoryId = searchParams.get("category_id");
+    const seriesId = searchParams.get("series_id");
+    const vodId = searchParams.get("vod_id");
+
+    const baseUrl = creds.serverUrl.replace(/\/+$/, "");
+    const authParams = `username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`;
+
+    // 1. LIVE
+    if (action === "get_live_categories") {
+      const res = await fetch(`${baseUrl}/player_api.php?${authParams}&action=get_live_categories`, {
+        next: { revalidate: 300 },
+      });
+      const data = await res.json();
+      return NextResponse.json(data);
     }
 
-    const response = await fetch(targetUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-      },
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Erreur de réponse du serveur distant" },
-        { status: response.status }
-      );
+    if (action === "get_live_streams") {
+      const url = `${baseUrl}/player_api.php?${authParams}&action=get_live_streams${
+        categoryId ? `&category_id=${categoryId}` : ""
+      }`;
+      const res = await fetch(url, { next: { revalidate: 120 } });
+      const data = await res.json();
+      return NextResponse.json(data);
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Erreur de communication avec le serveur Xtream" },
-      { status: 500 }
-    );
+    // 2. VOD FILMS
+    if (action === "get_vod_categories") {
+      const res = await fetch(`${baseUrl}/player_api.php?${authParams}&action=get_vod_categories`, {
+        next: { revalidate: 300 },
+      });
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    if (action === "get_vod_streams") {
+      const url = `${baseUrl}/player_api.php?${authParams}&action=get_vod_streams${
+        categoryId ? `&category_id=${categoryId}` : ""
+      }`;
+      const res = await fetch(url, { next: { revalidate: 300 } });
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    if (action === "get_vod_info" && vodId) {
+      const url = `${baseUrl}/player_api.php?${authParams}&action=get_vod_info&vod_id=${vodId}`;
+      const res = await fetch(url, { next: { revalidate: 300 } });
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    // 3. SÉRIES
+    if (action === "get_series_categories") {
+      const res = await fetch(`${baseUrl}/player_api.php?${authParams}&action=get_series_categories`, {
+        next: { revalidate: 300 },
+      });
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    if (action === "get_series") {
+      const url = `${baseUrl}/player_api.php?${authParams}&action=get_series${
+        categoryId ? `&category_id=${categoryId}` : ""
+      }`;
+      const res = await fetch(url, { next: { revalidate: 300 } });
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    if (action === "get_series_info" && seriesId) {
+      const url = `${baseUrl}/player_api.php?${authParams}&action=get_series_info&series_id=${seriesId}`;
+      const res = await fetch(url, { next: { revalidate: 300 } });
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+
+    return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 401 });
   }
 }

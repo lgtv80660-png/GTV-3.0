@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, User, ArrowRight, Loader2, Flame, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { Lock, User, ArrowRight, Loader2, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 
 const TMDB_API_KEY = "7b311a6f43090b24f188272bcc0655b3";
 
@@ -82,7 +82,7 @@ export default function LoginPage() {
     if (!isMouseDown || !carouselRef.current) return;
     e.preventDefault();
     const x = e.pageX - carouselRef.current.offsetLeft;
-    const walk = (x - startX) * 1.8; // Facteur de sensibilité de glissement
+    const walk = (x - startX) * 1.8;
     carouselRef.current.scrollLeft = scrollLeftState - walk;
   };
 
@@ -97,9 +97,10 @@ export default function LoginPage() {
       const data = await res.json();
 
       const videos = data.videos?.results || [];
-      const trailer = videos.find(
-        (v: any) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")
-      ) || videos[0];
+      const trailer =
+        videos.find(
+          (v: any) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")
+        ) || videos[0];
 
       if (trailer?.key) {
         setTrailerKey(trailer.key);
@@ -119,28 +120,29 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch(
-        `/api/xtream?action=auth&username=${encodeURIComponent(
-          username
-        )}&password=${encodeURIComponent(password)}`
-      );
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
 
       const data = await res.json();
 
-      if (data.user_info && data.user_info.auth === 1) {
+      if (res.ok && data.success) {
+        // Enregistrement des données utilisateur locales
         localStorage.setItem(
           "gtv_xtream_credentials",
           JSON.stringify({
             username,
             password,
-            userInfo: data.user_info,
-            serverInfo: data.server_info,
+            userInfo: data.user,
           })
         );
 
         router.push("/");
+        router.refresh();
       } else {
-        setError("Identifiants incorrects ou compte expiré.");
+        setError(data.error || "Identifiants incorrects ou compte expiré.");
       }
     } catch (err) {
       setError("Impossible de contacter le service de connexion.");

@@ -7,13 +7,10 @@ import {
   Search,
   Loader2,
   ChevronRight,
-  Maximize,
-  Volume2,
-  VolumeX,
   ArrowLeft,
-  Play,
   Radio,
 } from "lucide-react";
+import { VideoPlayer } from "@/components/player/VideoPlayer";
 
 interface Category {
   category_id: string;
@@ -40,43 +37,21 @@ export default function HomePage() {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingChannels, setLoadingChannels] = useState(false);
 
-  const [creds, setCreds] = useState<{ username: string; password: string } | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-
   const catContainerRef = useRef<HTMLDivElement>(null);
   const chanContainerRef = useRef<HTMLDivElement>(null);
-  const playerContainerRef = useRef<HTMLDivElement>(null);
 
-  // Initialisation Authentification
+  // 1. Initialisation & Chargement des catégories
   useEffect(() => {
-    const rawCreds = localStorage.getItem("gtv_xtream_credentials");
-    if (!rawCreds) {
-      router.push("/login");
-      return;
-    }
+    fetchCategories();
+  }, []);
 
+  async function fetchCategories() {
     try {
-      const parsed = JSON.parse(rawCreds);
-      if (!parsed.username || !parsed.password) {
+      const res = await fetch("/api/xtream?action=get_live_categories");
+      if (res.status === 401) {
         router.push("/login");
         return;
       }
-      const userCreds = { username: parsed.username, password: parsed.password };
-      setCreds(userCreds);
-
-      fetchCategories(userCreds.username, userCreds.password);
-    } catch (e) {
-      router.push("/login");
-    }
-  }, [router]);
-
-  async function fetchCategories(u: string, p: string) {
-    try {
-      const res = await fetch(
-        `/api/xtream?action=get_live_categories&username=${encodeURIComponent(
-          u
-        )}&password=${encodeURIComponent(p)}`
-      );
       const data = await res.json();
 
       if (Array.isArray(data) && data.length > 0) {
@@ -89,22 +64,15 @@ export default function HomePage() {
     }
   }
 
-  // Chargement des chaînes de la catégorie sélectionnée
+  // 2. Chargement des chaînes de la catégorie sélectionnée
   useEffect(() => {
-    if (!selectedCategory || !creds) return;
-
-    const activeUser = creds.username;
-    const activePass = creds.password;
+    if (!selectedCategory) return;
 
     async function fetchChannels() {
       setLoadingChannels(true);
       try {
         const res = await fetch(
-          `/api/xtream?action=get_live_streams&username=${encodeURIComponent(
-            activeUser
-          )}&password=${encodeURIComponent(
-            activePass
-          )}&category_id=${selectedCategory?.category_id}`
+          `/api/xtream?action=get_live_streams&category_id=${selectedCategory?.category_id}`
         );
         const data = await res.json();
 
@@ -119,7 +87,7 @@ export default function HomePage() {
     }
 
     fetchChannels();
-  }, [selectedCategory, creds]);
+  }, [selectedCategory]);
 
   const handleSelectCategory = (cat: Category) => {
     setSelectedCategory(cat);
@@ -138,33 +106,7 @@ export default function HomePage() {
     localStorage.setItem("gtv_last_watched", JSON.stringify(lastWatched));
   };
 
-  const handleTriggerFullScreen = async () => {
-    if (!playerContainerRef.current) return;
-
-    try {
-      if (!document.fullscreenElement) {
-        if (playerContainerRef.current.requestFullscreen) {
-          await playerContainerRef.current.requestFullscreen();
-        }
-
-        if (typeof window !== "undefined" && window.screen?.orientation && "lock" in window.screen.orientation) {
-          // @ts-ignore
-          await window.screen.orientation.lock("landscape").catch(() => {});
-        }
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        }
-        if (typeof window !== "undefined" && window.screen?.orientation && "unlock" in window.screen.orientation) {
-          // @ts-ignore
-          window.screen.orientation.unlock();
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
+  // 3. Glissage vertical à la souris (Drag & Scroll Desktop)
   const enableDragScroll = (ref: React.RefObject<HTMLDivElement | null>) => {
     let isDown = false;
     let startY: number;
@@ -217,12 +159,10 @@ export default function HomePage() {
     ch.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const streamUrl =
-    selectedChannel && creds
-      ? `/api/xtream?action=stream_live&username=${encodeURIComponent(
-          creds.username
-        )}&password=${encodeURIComponent(creds.password)}&stream_id=${selectedChannel.stream_id}`
-      : null;
+  // CORRECTION CRITIQUE : Appel de la route HLS exact de gtv2 pour le Direct
+  const streamUrl = selectedChannel
+    ? `/api/hls?id=${selectedChannel.stream_id}`
+    : null;
 
   return (
     <div className="h-full w-full bg-[#080b10] text-white flex flex-col md:flex-row p-2 md:p-4 gap-3 md:gap-4 overflow-hidden font-sans select-none relative pb-16 md:pb-0">
@@ -230,80 +170,24 @@ export default function HomePage() {
       {/* ========================================================= */}
       {/* LECTEUR APERÇU (HAUT SUR MOBILE 40% / DERNIER SUR DESKTOP)  */}
       {/* ========================================================= */}
-      <div
-        ref={playerContainerRef}
-        onDoubleClick={handleTriggerFullScreen}
-        className="w-full md:w-auto md:flex-1 h-[38vh] md:h-full bg-[#0e121a]/90 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl flex flex-col z-20 md:z-10 shadow-2xl overflow-hidden relative group/player flex-shrink-0 md:order-last"
-      >
-        {/* Header Player */}
-        <div className="h-12 md:h-16 border-b border-white/10 px-3 md:px-6 flex items-center justify-between bg-white/5 flex-shrink-0">
-          <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
-            {selectedChannel ? (
-              <>
-                <div className="w-7 h-7 md:w-9 md:h-9 rounded-lg bg-black border border-white/15 p-1 flex items-center justify-center shadow-md flex-shrink-0">
-                  <img
-                    src={selectedChannel.stream_icon}
-                    alt={selectedChannel.name}
-                    className="max-w-full max-h-full object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h1 className="text-xs font-extrabold text-white tracking-wide truncate">
-                    {selectedChannel.name}
-                  </h1>
-                  <p className="text-[9px] md:text-[10px] text-emerald-400 flex items-center gap-1 font-bold">
-                    <Radio className="w-2.5 h-2.5 animate-pulse" /> Direct HD
-                  </p>
-                </div>
-              </>
-            ) : (
-              <span className="text-xs text-zinc-400 font-semibold">G-TV Aperçu Direct</span>
-            )}
+      <div className="w-full md:w-auto md:flex-1 h-[38vh] md:h-full bg-[#0e121a]/90 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl flex flex-col z-20 md:z-10 shadow-2xl overflow-hidden relative flex-shrink-0 md:order-last">
+        {selectedChannel && streamUrl ? (
+          <VideoPlayer
+            key={selectedChannel.stream_id}
+            sources={[streamUrl]}
+            ext="m3u8"
+            isLive={true}
+            title={selectedChannel.name}
+            channelIcon={selectedChannel.stream_icon}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full space-y-2 text-zinc-600 p-4 text-center">
+            <Tv className="w-8 h-8 md:w-10 md:h-10 stroke-1" />
+            <p className="text-[11px] md:text-xs font-semibold">
+              Sélectionnez une chaîne pour démarrer la lecture
+            </p>
           </div>
-
-          <div className="flex items-center space-x-1.5 md:space-x-2 flex-shrink-0">
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className="p-1.5 md:p-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg md:rounded-xl text-zinc-300 hover:text-white transition-all active:scale-95"
-            >
-              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5" />}
-            </button>
-
-            <button
-              onClick={handleTriggerFullScreen}
-              className="p-1.5 md:p-2.5 bg-white text-black font-bold border border-white rounded-lg md:rounded-xl transition-all active:scale-95 flex items-center space-x-1.5 text-xs shadow-lg"
-            >
-              <Maximize className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Plein Écran</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Écran Vidéo */}
-        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          {selectedChannel ? (
-            <iframe
-              src={`${streamUrl}${isMuted ? "&muted=1" : ""}`}
-              className="w-full h-full border-none"
-              allow="autoplay; encrypted-media; fullscreen"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center space-y-2 text-zinc-600 p-4 text-center">
-              <Tv className="w-8 h-8 md:w-10 md:h-10 stroke-1" />
-              <p className="text-[11px] md:text-xs font-semibold">
-                Sélectionnez une chaîne pour lancer l'aperçu
-              </p>
-            </div>
-          )}
-
-          <div className="absolute bottom-3 bg-black/80 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full text-[10px] font-bold text-white opacity-0 group-hover/player:opacity-100 transition-opacity duration-300 shadow-2xl pointer-events-none flex items-center space-x-1.5">
-            <Play className="w-3 h-3 fill-white" />
-            <span>Double-cliquez pour Plein Écran</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* ========================================================= */}
@@ -422,7 +306,6 @@ export default function HomePage() {
                     <button
                       key={channel.stream_id}
                       onClick={() => handleSelectChannel(channel)}
-                      onDoubleClick={handleTriggerFullScreen}
                       className={`w-full flex items-center space-x-3 p-2 md:p-2.5 rounded-xl md:rounded-2xl transition-all duration-300 text-left relative active:scale-98 ${
                         isSelected
                           ? "bg-white text-black font-black shadow-[0_10px_20px_rgba(255,255,255,0.2)]"
@@ -450,8 +333,8 @@ export default function HomePage() {
                             #{channel.num}
                           </span>
                           {isSelected && (
-                            <span className="text-[8px] font-black text-black uppercase tracking-widest bg-black/10 px-1.5 py-0.5 rounded">
-                              Direct
+                            <span className="text-[8px] font-black text-black uppercase tracking-widest bg-black/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <Radio className="w-2 h-2 animate-pulse text-emerald-600" /> Direct
                             </span>
                           )}
                         </div>
