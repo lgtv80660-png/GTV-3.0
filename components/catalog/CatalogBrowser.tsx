@@ -3,7 +3,7 @@
 import { useUI } from "@/store/ui";
 import type { FilterState } from "@/store/ui";
 
-export default function CatalogBrowser() {
+export function CatalogBrowser() {
   const { filters, patchFilter } = useUI();
 
   const activeFilters: FilterState =
@@ -31,3 +31,5 @@ export default function CatalogBrowser() {
     </div>
   );
 }
+
+export default CatalogBrowser;
