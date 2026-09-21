@@ -12,7 +12,7 @@ export function useVodStreams() {
 export function useVodCategories() {
   return useQuery({
     queryKey: ["vod", "categories"],
-    queryFn: () => api.vodCategories(),
+    queryFn: () => (api as any).vodCategories ? (api as any).vodCategories() : [],
     staleTime: 1000 * 60 * 15,
   });
 }
@@ -20,7 +20,10 @@ export function useVodCategories() {
 export function useSeriesStreams() {
   return useQuery({
     queryKey: ["series", "streams"],
-    queryFn: () => api.seriesStreams(),
+    queryFn: () => {
+      const a = api as any;
+      return a.seriesStreams ? a.seriesStreams() : (a.series ? a.series() : []);
+    },
     staleTime: 1000 * 60 * 15,
   });
 }
@@ -28,7 +31,10 @@ export function useSeriesStreams() {
 export function useSeriesCategories() {
   return useQuery({
     queryKey: ["series", "categories"],
-    queryFn: () => api.seriesCategories(),
+    queryFn: () => {
+      const a = api as any;
+      return a.seriesCategories ? a.seriesCategories() : [];
+    },
     staleTime: 1000 * 60 * 15,
   });
 }
