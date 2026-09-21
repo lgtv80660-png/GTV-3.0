@@ -1,36 +1,49 @@
-"use client";
+﻿"use client";
 
-import { useMemo } from "react";
 import { CatalogBrowser } from "@/components/catalog/CatalogBrowser";
-import { useVodCategories, useVodStreams } from "@/lib/hooks";
-import { useTranslation } from "@/lib/useTranslation";
+import { useVodStreams } from "@/lib/hooks";
 import type { VodStream } from "@/lib/xtream/types";
+import { useRouter } from "next/navigation";
+import { Film, Star, Loader2 } from "lucide-react";
 
 export default function MoviesPage() {
-  const { t } = useTranslation();
-  const { data: categories = [] } = useVodCategories();
+  const router = useRouter();
+  const { data: movies = [], isLoading } = useVodStreams();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#0d0e12] text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-purple-500" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-ink-950 via-zinc-950 to-black text-white">
-      <CatalogBrowser<VodStream>
-        sectionKey="movies"
-        categories={categories}
-        useItems={(catId) => useVodStreams(catId)}
-        toPoster={(item) => ({
-          id: item.stream_id,
-          name: item.name || item.title || "Film",
-          poster: item.stream_icon || item.cover,
-          rating: item.rating,
-          year: item.year,
-          container_extension: item.container_extension || "mp4",
+    <div className="min-h-screen bg-[#0d0e12] text-white p-6 space-y-6">
+      <CatalogBrowser />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {(movies as VodStream[]).map((movie) => {
+          const id = movie.stream_id;
+          const title = movie.name || movie.title || "Film";
+          const cover = movie.stream_icon || movie.cover;
+          return (
+            <div
+              key={id}
+              onClick={() => router.push(`/movies/${id}`)}
+              className="group cursor-pointer rounded-xl bg-white/5 border border-white/5 hover:border-purple-500/50 transition overflow-hidden p-2"
+            >
+              <div className="aspect-[2/3] w-full bg-black/40 rounded-lg overflow-hidden relative mb-2">
+                {cover ? (
+                  <img src={cover} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-600"><Film className="h-8 w-8" /></div>
+                )}
+              </div>
+              <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
+            </div>
+          );
         })}
-        hrefFor={(item) => `/movies/${item.stream_id}`}
-        emptyLabel={t("Catalog.emptyCategory")}
-        onPlayItem={(item) => {
-          const ext = item.container_extension || "mp4";
-          window.location.href = `/api/stream-vod?type=movie&id=${item.stream_id}&ext=${ext}`;
-        }}
-      />
+      </div>
     </div>
   );
 }
