@@ -1,33 +1,18 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import type { SortKey } from "@/lib/utils";
 
-export interface SectionFilter {
-  category: string;
-  sort: SortKey;
-  query: string;
-}
-
-export const DEFAULT_FILTER: SectionFilter = {
+export const DEFAULT_FILTER = {
   category: "all",
-  sort: "name_asc",
-  query: "",
+  search: "",
+  sortBy: "name" as SortKey,
 };
 
 interface UIState {
-  filters: Record<string, SectionFilter>;
-  patchFilter: (section: string, patch: Partial<SectionFilter>) => void;
+  sortBy: SortKey;
+  setSortBy: (sort: SortKey) => void;
 }
 
 export const useUI = create<UIState>((set) => ({
-  filters: {},
-  patchFilter: (section, patch) =>
-    set((state) => ({
-      filters: {
-        ...state.filters,
-        [section]: {
-          ...(state.filters[section] ?? DEFAULT_FILTER),
-          ...patch,
-        },
-      },
-    })),
+  sortBy: "name",
+  setSortBy: (sortBy) => set({ sortBy }),
 }));
