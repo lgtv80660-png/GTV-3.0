@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #000000;
+  }
+
+  html, body {
+    background-color: #000000;
+    color: #ffffff;
+    min-height: 100vh;
+  }
+}
+
+/* Subtile lueur diffuse argentée/grise en haut à gauche */
+body::before {
+  content: "";
+  position: fixed;
+  top: -15%;
+  left: -10%;
+  width: 50vw;
+  height: 50vh;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
