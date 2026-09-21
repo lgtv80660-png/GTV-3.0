@@ -48,8 +48,9 @@ export default function SeriesDetailPage() {
     return `/api/stream-vod?type=series&id=${currentEpisode.id}&ext=${ext}`;
   }, [currentEpisode]);
 
-  const youtubeTrailerId = info?.youtube_trailer;
-  const bannerImage = info?.backdrop_path?.[0] || info?.cover;
+  // Certains flux Xtream ajoutent cette propriété sans la déclarer dans SeriesItem.
+  const youtubeTrailerId = (info as { youtube_trailer?: string } | undefined)?.youtube_trailer;
+  const bannerImage = (info as { backdrop_path?: string[] } | undefined)?.backdrop_path?.[0] || info?.cover;
 
   if (isLoading) {
     return (

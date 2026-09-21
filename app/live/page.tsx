@@ -7,7 +7,14 @@ import { useLiveStreams, useLiveCategories } from "@/lib/hooks";
 import { useLibrary } from "@/store/library";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cleanName, cn } from "@/lib/utils";
-import type { LiveStream } from "@/lib/xtream/types";
+
+type LiveStream = {
+  stream_id: string | number;
+  name?: string;
+  category_id?: string | number;
+  stream_icon?: string;
+  num?: string | number;
+};
 
 export default function LivePage() {
   const { data: categoriesData, isLoading: isCatLoading } = useLiveCategories();
