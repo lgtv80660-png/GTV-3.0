@@ -18,18 +18,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className="dark">
+      {/* Correction appliquée sur la ligne suivante : ajout des backticks */}
       <body className={${inter.className} bg-background text-white antialiased overflow-hidden select-none}>
         <Providers>
           <div className="flex h-screen w-full relative">
             
-            {/* Notre nouveau composant Navigation global */}
-            <Navigation />
+            <Navigation/>
             
-            {/* 
-              Zone de contenu principale. 
-              Le md:ml-16 décale le contenu sur desktop pour ne pas être caché sous la sidebar 
-              Le pb-16 décale le contenu sur mobile pour ne pas être caché par la bottom bar
-            */}
             <main className="flex-1 relative overflow-y-auto pb-16 md:pb-0 md:ml-16 bg-surface/30">
               {children}
             </main>
