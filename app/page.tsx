@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Tv,
   Search,
   Loader2,
-  Radio,
   ChevronRight,
   Maximize,
+  Volume2,
+  VolumeX,
+  ArrowLeft,
+  Play,
+  Radio,
 } from "lucide-react";
 
 interface Category {
@@ -37,8 +41,13 @@ export default function HomePage() {
   const [loadingChannels, setLoadingChannels] = useState(false);
 
   const [creds, setCreds] = useState<{ username: string; password: string } | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
 
-  // 1. Initialisation Authentification
+  const catContainerRef = useRef<HTMLDivElement>(null);
+  const chanContainerRef = useRef<HTMLDivElement>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Initialisation Authentification
   useEffect(() => {
     const rawCreds = localStorage.getItem("gtv_xtream_credentials");
     if (!rawCreds) {
@@ -48,15 +57,19 @@ export default function HomePage() {
 
     try {
       const parsed = JSON.parse(rawCreds);
-      setCreds({ username: parsed.username, password: parsed.password });
+      if (!parsed.username || !parsed.password) {
+        router.push("/login");
+        return;
+      }
+      const userCreds = { username: parsed.username, password: parsed.password };
+      setCreds(userCreds);
 
-      fetchCategories(parsed.username, parsed.password);
+      fetchCategories(userCreds.username, userCreds.password);
     } catch (e) {
       router.push("/login");
     }
   }, [router]);
 
-  // Chargement des catégories
   async function fetchCategories(u: string, p: string) {
     try {
       const res = await fetch(
@@ -68,39 +81,35 @@ export default function HomePage() {
 
       if (Array.isArray(data) && data.length > 0) {
         setCategories(data);
-        setSelectedCategory(data[0]);
       }
     } catch (err) {
       console.error(err);
-    } font
-    finally {
+    } finally {
       setLoadingCategories(false);
     }
   }
 
-  // 2. Chargement des chaînes de la catégorie choisie
+  // Chargement des chaînes de la catégorie sélectionnée
   useEffect(() => {
     if (!selectedCategory || !creds) return;
+
+    const activeUser = creds.username;
+    const activePass = creds.password;
 
     async function fetchChannels() {
       setLoadingChannels(true);
       try {
         const res = await fetch(
           `/api/xtream?action=get_live_streams&username=${encodeURIComponent(
-            creds!.username
+            activeUser
           )}&password=${encodeURIComponent(
-            creds!.password
+            activePass
           )}&category_id=${selectedCategory?.category_id}`
         );
         const data = await res.json();
 
         if (Array.isArray(data)) {
           setChannels(data);
-          if (data.length > 0) {
-            handleSelectChannel(data[0]);
-          } else {
-            setSelectedChannel(null);
-          }
         }
       } catch (err) {
         console.error(err);
@@ -111,6 +120,10 @@ export default function HomePage() {
 
     fetchChannels();
   }, [selectedCategory, creds]);
+
+  const handleSelectCategory = (cat: Category) => {
+    setSelectedCategory(cat);
+  };
 
   const handleSelectChannel = (channel: Channel) => {
     setSelectedChannel(channel);
@@ -125,11 +138,85 @@ export default function HomePage() {
     localStorage.setItem("gtv_last_watched", JSON.stringify(lastWatched));
   };
 
+  const handleTriggerFullScreen = async () => {
+    if (!playerContainerRef.current) return;
+
+    try {
+      if (!document.fullscreenElement) {
+        if (playerContainerRef.current.requestFullscreen) {
+          await playerContainerRef.current.requestFullscreen();
+        }
+
+        if (typeof window !== "undefined" && window.screen?.orientation && "lock" in window.screen.orientation) {
+          // @ts-ignore
+          await window.screen.orientation.lock("landscape").catch(() => {});
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+        if (typeof window !== "undefined" && window.screen?.orientation && "unlock" in window.screen.orientation) {
+          // @ts-ignore
+          window.screen.orientation.unlock();
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const enableDragScroll = (ref: React.RefObject<HTMLDivElement | null>) => {
+    let isDown = false;
+    let startY: number;
+    let scrollTop: number;
+
+    const container = ref.current;
+    if (!container) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDown = true;
+      startY = e.pageY - container.offsetTop;
+      scrollTop = container.scrollTop;
+    };
+
+    const onMouseLeaveOrUp = () => {
+      isDown = false;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const y = e.pageY - container.offsetTop;
+      const walk = (y - startY) * 1.5;
+      container.scrollTop = scrollTop - walk;
+    };
+
+    container.addEventListener("mousedown", onMouseDown);
+    container.addEventListener("mouseleave", onMouseLeaveOrUp);
+    container.addEventListener("mouseup", onMouseLeaveOrUp);
+    container.addEventListener("mousemove", onMouseMove);
+
+    return () => {
+      container.removeEventListener("mousedown", onMouseDown);
+      container.removeEventListener("mouseleave", onMouseLeaveOrUp);
+      container.removeEventListener("mouseup", onMouseLeaveOrUp);
+      container.removeEventListener("mousemove", onMouseMove);
+    };
+  };
+
+  useEffect(() => {
+    const cleanCat = enableDragScroll(catContainerRef);
+    const cleanChan = enableDragScroll(chanContainerRef);
+    return () => {
+      if (cleanCat) cleanCat();
+      if (cleanChan) cleanChan();
+    };
+  }, [loadingCategories, loadingChannels, selectedCategory]);
+
   const filteredChannels = channels.filter((ch) =>
     ch.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // URL du flux direct
   const streamUrl =
     selectedChannel && creds
       ? `/api/xtream?action=stream_live&username=${encodeURIComponent(
@@ -138,188 +225,247 @@ export default function HomePage() {
       : null;
 
   return (
-    <div className="h-screen w-screen bg-[#080b10] text-white flex overflow-hidden font-sans select-none">
+    <div className="h-full w-full bg-[#080b10] text-white flex flex-col md:flex-row p-2 md:p-4 gap-3 md:gap-4 overflow-hidden font-sans select-none relative pb-16 md:pb-0">
       
       {/* ========================================================= */}
-      {/* PANNEAU 1 : BARRE DES CATÉGORIES (GAUCHE)                 */}
+      {/* LECTEUR APERÇU (HAUT SUR MOBILE 40% / DERNIER SUR DESKTOP)  */}
       {/* ========================================================= */}
-      <div className="w-64 h-full bg-[#0d1117] border-r border-white/10 flex flex-col flex-shrink-0 z-20">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Tv className="w-4 h-4 text-blue-500" />
-            <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300">
-              Catégories
-            </h2>
-          </div>
-          <span className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">
-            {categories.length}
-          </span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
-          {loadingCategories ? (
-            <div className="flex flex-col items-center justify-center h-40 text-zinc-500 space-y-2">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-              <span className="text-xs">Chargement...</span>
-            </div>
-          ) : (
-            categories.map((cat) => {
-              const isSelected = selectedCategory?.category_id === cat.category_id;
-              return (
-                <button
-                  key={cat.category_id}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                    isSelected
-                      ? "bg-white text-black shadow-lg"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  <span className="truncate">{cat.category_name}</span>
-                  <ChevronRight
-                    className={`w-3.5 h-3.5 ${
-                      isSelected ? "text-black" : "text-zinc-600"
-                    }`}
+      <div
+        ref={playerContainerRef}
+        onDoubleClick={handleTriggerFullScreen}
+        className="w-full md:w-auto md:flex-1 h-[38vh] md:h-full bg-[#0e121a]/90 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl flex flex-col z-20 md:z-10 shadow-2xl overflow-hidden relative group/player flex-shrink-0 md:order-last"
+      >
+        {/* Header Player */}
+        <div className="h-12 md:h-16 border-b border-white/10 px-3 md:px-6 flex items-center justify-between bg-white/5 flex-shrink-0">
+          <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
+            {selectedChannel ? (
+              <>
+                <div className="w-7 h-7 md:w-9 md:h-9 rounded-lg bg-black border border-white/15 p-1 flex items-center justify-center shadow-md flex-shrink-0">
+                  <img
+                    src={selectedChannel.stream_icon}
+                    alt={selectedChannel.name}
+                    className="max-w-full max-h-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
                   />
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* PANNEAU 2 : BARRE DES CHAÎNES (MILIEU)                   */}
-      {/* ========================================================= */}
-      <div className="w-72 h-full bg-[#0a0d14] border-r border-white/10 flex flex-col flex-shrink-0 z-10">
-        <div className="p-4 border-b border-white/10 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white truncate">
-              {selectedCategory?.category_name}
-            </h3>
-            <span className="text-[10px] text-zinc-500">
-              {filteredChannels.length} chaîne(s)
-            </span>
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xs font-extrabold text-white tracking-wide truncate">
+                    {selectedChannel.name}
+                  </h1>
+                  <p className="text-[9px] md:text-[10px] text-emerald-400 flex items-center gap-1 font-bold">
+                    <Radio className="w-2.5 h-2.5 animate-pulse" /> Direct HD
+                  </p>
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-zinc-400 font-semibold">G-TV Aperçu Direct</span>
+            )}
           </div>
 
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Chercher..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-1.5 pl-8 pr-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-white/30"
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-none">
-          {loadingChannels ? (
-            <div className="flex flex-col items-center justify-center h-40 text-zinc-500 space-y-2">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-              <span className="text-xs">Chargement...</span>
-            </div>
-          ) : (
-            filteredChannels.map((channel) => {
-              const isSelected = selectedChannel?.stream_id === channel.stream_id;
-              return (
-                <button
-                  key={channel.stream_id}
-                  onClick={() => handleSelectChannel(channel)}
-                  className={`w-full flex items-center space-x-3 p-2 rounded-xl transition-all text-left ${
-                    isSelected
-                      ? "bg-blue-600/20 border border-blue-500/40 text-white"
-                      : "hover:bg-white/5 border border-transparent text-zinc-300"
-                  }`}
-                >
-                  <div className="w-9 h-9 rounded-lg bg-black border border-white/10 p-1 flex items-center justify-center flex-shrink-0">
-                    {channel.stream_icon ? (
-                      <img
-                        src={channel.stream_icon}
-                        alt={channel.name}
-                        className="max-w-full max-h-full object-contain"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <Tv className="w-4 h-4 text-zinc-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-bold text-zinc-500 block">
-                      #{channel.num}
-                    </span>
-                    <p className="text-xs font-bold truncate">{channel.name}</p>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* ZONE 3 : LECTEUR DIRECT EN TEMPS RÉEL (DROITE)             */}
-      {/* ========================================================= */}
-      <div className="flex-1 h-full flex flex-col bg-black relative">
-        
-        {/* Header Direct */}
-        <div className="h-16 border-b border-white/10 px-6 flex items-center justify-between bg-[#080b10]">
-          {selectedChannel ? (
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-black border border-white/15 p-1 flex items-center justify-center">
-                <img
-                  src={selectedChannel.stream_icon}
-                  alt={selectedChannel.name}
-                  className="max-w-full max-h-full object-contain"
-                />
-              </div>
-              <div>
-                <h1 className="text-xs font-bold text-white">
-                  {selectedChannel.name}
-                </h1>
-                <p className="text-[10px] text-emerald-400 flex items-center gap-1">
-                  <Radio className="w-3 h-3 animate-pulse" /> En Direct
-                </p>
-              </div>
-            </div>
-          ) : (
-            <span className="text-xs text-zinc-500">Aucune chaîne active</span>
-          )}
-
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 md:space-x-2 flex-shrink-0">
             <button
-              onClick={() => {
-                if (document.fullscreenElement) {
-                  document.exitFullscreen();
-                } else {
-                  document.documentElement.requestFullscreen();
-                }
-              }}
-              className="p-2 hover:bg-white/10 rounded-xl text-zinc-400 hover:text-white"
+              onClick={() => setIsMuted(!isMuted)}
+              className="p-1.5 md:p-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg md:rounded-xl text-zinc-300 hover:text-white transition-all active:scale-95"
             >
-              <Maximize className="w-4 h-4" />
+              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5" />}
+            </button>
+
+            <button
+              onClick={handleTriggerFullScreen}
+              className="p-1.5 md:p-2.5 bg-white text-black font-bold border border-white rounded-lg md:rounded-xl transition-all active:scale-95 flex items-center space-x-1.5 text-xs shadow-lg"
+            >
+              <Maximize className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Plein Écran</span>
             </button>
           </div>
         </div>
 
-        {/* Écran Lecteur Vidéo */}
+        {/* Écran Vidéo */}
         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
           {selectedChannel ? (
             <iframe
-              src={streamUrl || ""}
+              src={`${streamUrl}${isMuted ? "&muted=1" : ""}`}
               className="w-full h-full border-none"
               allow="autoplay; encrypted-media; fullscreen"
             />
           ) : (
-            <div className="flex flex-col items-center space-y-2 text-zinc-600">
-              <Tv className="w-10 h-10 stroke-1" />
-              <p className="text-xs">Sélectionnez une chaîne pour démarrer la lecture</p>
+            <div className="flex flex-col items-center justify-center space-y-2 text-zinc-600 p-4 text-center">
+              <Tv className="w-8 h-8 md:w-10 md:h-10 stroke-1" />
+              <p className="text-[11px] md:text-xs font-semibold">
+                Sélectionnez une chaîne pour lancer l'aperçu
+              </p>
             </div>
           )}
+
+          <div className="absolute bottom-3 bg-black/80 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full text-[10px] font-bold text-white opacity-0 group-hover/player:opacity-100 transition-opacity duration-300 shadow-2xl pointer-events-none flex items-center space-x-1.5">
+            <Play className="w-3 h-3 fill-white" />
+            <span>Double-cliquez pour Plein Écran</span>
+          </div>
         </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* CONTENU NAVIGATION (CATÉGORIES ➔ CHAÎNES)                */}
+      {/* ========================================================= */}
+      <div className="flex-1 md:flex-initial h-[62vh] md:h-full flex gap-3 md:gap-4 overflow-hidden min-w-0 relative md:order-first">
+        
+        {/* PANNEAU 1 : CATÉGORIES */}
+        <div
+          className={`h-full bg-[#0e121a]/90 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl flex flex-col z-10 shadow-2xl overflow-hidden transition-all duration-300 ${
+            selectedCategory
+              ? "hidden md:flex md:w-64 lg:w-72 flex-shrink-0"
+              : "w-full md:w-72 flex-shrink-0"
+          }`}
+        >
+          <div className="p-3 md:p-4 border-b border-white/10 flex items-center justify-between h-12 md:h-16 flex-shrink-0 bg-white/5">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-white text-black flex items-center justify-center font-black text-xs shadow-lg">
+                G
+              </div>
+              <h2 className="text-xs font-extrabold tracking-wider uppercase text-white">
+                Catégories
+              </h2>
+            </div>
+            <span className="text-[10px] font-extrabold bg-white/10 text-zinc-300 px-2 py-0.5 rounded-full border border-white/10">
+              {categories.length}
+            </span>
+          </div>
+
+          <div
+            ref={catContainerRef}
+            className="flex-1 overflow-y-auto p-2 md:p-3 space-y-1.5 scrollbar-none cursor-grab active:cursor-grabbing touch-pan-y"
+          >
+            {loadingCategories ? (
+              <div className="flex flex-col items-center justify-center h-32 text-zinc-500 space-y-2">
+                <Loader2 className="w-5 h-5 animate-spin text-white" />
+                <span className="text-xs font-medium">Chargement...</span>
+              </div>
+            ) : (
+              categories.map((cat) => {
+                const isSelected = selectedCategory?.category_id === cat.category_id;
+                return (
+                  <button
+                    key={cat.category_id}
+                    onClick={() => handleSelectCategory(cat)}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl text-xs transition-all duration-300 text-left active:scale-98 ${
+                      isSelected
+                        ? "bg-white text-black font-black shadow-[0_10px_25px_rgba(255,255,255,0.2)]"
+                        : "text-zinc-300 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10"
+                    }`}
+                  >
+                    <span className="truncate pr-2">{cat.category_name}</span>
+                    <ChevronRight
+                      className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                        isSelected ? "text-black translate-x-0.5" : "text-zinc-500 group-hover:text-white"
+                      }`}
+                    />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* PANNEAU 2 : CHAÎNES */}
+        {selectedCategory && (
+          <div className="w-full md:w-72 lg:w-80 h-full bg-[#0e121a]/90 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl flex flex-col flex-shrink-0 z-10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-4 md:slide-in-from-left-4 duration-300">
+            <div className="p-3 md:p-4 border-b border-white/10 space-y-2 h-20 md:h-24 flex-shrink-0 justify-center flex flex-col bg-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <button
+                    onClick={() => setSelectedCategory(null)}
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 active:scale-90 text-white transition-all flex items-center justify-center flex-shrink-0"
+                    title="Retour aux catégories"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <h3 className="text-xs font-extrabold text-white truncate">
+                    {selectedCategory.category_name}
+                  </h3>
+                </div>
+                <span className="text-[10px] text-zinc-400 font-bold bg-white/5 px-2 py-0.5 rounded-md border border-white/10 ml-2 flex-shrink-0">
+                  {filteredChannels.length}
+                </span>
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Chercher une chaîne..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-1 pl-8 pr-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-all"
+                />
+              </div>
+            </div>
+
+            <div
+              ref={chanContainerRef}
+              className="flex-1 overflow-y-auto p-2 md:p-3 space-y-1.5 scrollbar-none cursor-grab active:cursor-grabbing touch-pan-y"
+            >
+              {loadingChannels ? (
+                <div className="flex flex-col items-center justify-center h-32 text-zinc-500 space-y-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-white" />
+                  <span className="text-xs font-medium">Chargement...</span>
+                </div>
+              ) : filteredChannels.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 text-zinc-500 text-xs font-medium">
+                  Aucune chaîne disponible
+                </div>
+              ) : (
+                filteredChannels.map((channel) => {
+                  const isSelected = selectedChannel?.stream_id === channel.stream_id;
+                  return (
+                    <button
+                      key={channel.stream_id}
+                      onClick={() => handleSelectChannel(channel)}
+                      onDoubleClick={handleTriggerFullScreen}
+                      className={`w-full flex items-center space-x-3 p-2 md:p-2.5 rounded-xl md:rounded-2xl transition-all duration-300 text-left relative active:scale-98 ${
+                        isSelected
+                          ? "bg-white text-black font-black shadow-[0_10px_20px_rgba(255,255,255,0.2)]"
+                          : "hover:bg-white/10 border border-transparent hover:border-white/10 text-zinc-300"
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-black border border-white/15 p-1 flex items-center justify-center flex-shrink-0 pointer-events-none">
+                        {channel.stream_icon ? (
+                          <img
+                            src={channel.stream_icon}
+                            alt={channel.name}
+                            className="max-w-full max-h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <Tv className="w-4 h-4 text-zinc-500" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0 pointer-events-none space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9px] font-extrabold ${isSelected ? "text-zinc-700" : "text-zinc-500"}`}>
+                            #{channel.num}
+                          </span>
+                          {isSelected && (
+                            <span className="text-[8px] font-black text-black uppercase tracking-widest bg-black/10 px-1.5 py-0.5 rounded">
+                              Direct
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs truncate ${isSelected ? "text-black font-black" : "text-zinc-200 font-bold"}`}>
+                          {channel.name}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
 
