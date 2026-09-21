@@ -328,7 +328,7 @@ export default function SeriesDetailPage() {
           transition={smoothTransition}
           className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start relative w-full"
         >
-          {/* LECTEUR EN MOBILE (STICKY SUR ÉCRAN SI SELECTIONNÉ) */}
+          {/* LECTEUR EN MOBILE (STICKY SUR ÉCRAN SI SÉLECTIONNÉ) */}
           <AnimatePresence mode="popLayout">
             {activeEpisode && (
               <motion.div
@@ -372,13 +372,11 @@ export default function SeriesDetailPage() {
                     <VideoPlayer
                       key={activeEpisode.id}
                       sources={[
-                        activeEpisode.container_extension === "mp4"
-                          ? `/api/stream-vod?type=series&id=${activeEpisode.id}&ext=mp4`
-                          : `/api/transcode?type=series&id=${activeEpisode.id}&ext=${
-                              activeEpisode.container_extension || "mkv"
-                            }`,
+                        `/api/stream?type=series&id=${activeEpisode.id}&ext=${
+                          activeEpisode.container_extension || "mkv"
+                        }`,
                       ]}
-                      ext={activeEpisode.container_extension || "mp4"}
+                      ext={activeEpisode.container_extension || "mkv"}
                       isLive={false}
                       title={`${title} - S${activeEpisode.season || activeSeasonKey}E${
                         activeEpisode.episode_num || activeEpisode.episode
@@ -397,7 +395,7 @@ export default function SeriesDetailPage() {
                     )}
                     {info?.genre && <span className="text-fog-500">• {info.genre}</span>}
                     <span className="uppercase text-[9px] font-bold bg-white/10 px-1.5 py-0.5 rounded text-fog-300">
-                      {activeEpisode.container_extension || "mp4"}
+                      {activeEpisode.container_extension || "mkv"}
                     </span>
                   </div>
                 </div>
@@ -424,7 +422,7 @@ export default function SeriesDetailPage() {
             >
               {episodes.map((ep: Episode) => {
                 const isSelected = activeEpisode?.id === ep.id;
-                const ext = ep.container_extension || "mp4";
+                const ext = ep.container_extension || "mkv";
                 const epTitle = ep.title || `Episode ${ep.episode_num || ep.episode}`;
                 const resume = progress[`series:${ep.id}`]?.position ?? 0;
 
