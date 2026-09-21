@@ -1,13 +1,13 @@
 ﻿"use client";
 
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { resolveSrc } from "@/lib/api";
 import { useSeriesInfo } from "@/lib/hooks";
 import type { StreamKind, Episode } from "@/lib/xtream/types";
 
-export default function WatchPage() {
+function WatchPlayer() {
   const searchParams = useSearchParams();
   const type = (searchParams.get("type") || "movie") as StreamKind;
   const id = searchParams.get("id") || "";
@@ -41,15 +41,23 @@ export default function WatchPage() {
   }, [isLive, id, type, extParam, resolved]);
 
   return (
+    <div className="flex-1 relative">
+      <video
+        src={videoSrc}
+        controls
+        autoPlay
+        className="h-full w-full object-contain"
+      />
+    </div>
+  );
+}
+
+export default function WatchPage() {
+  return (
     <div className="flex h-screen w-full flex-col bg-black text-white">
-      <div className="flex-1 relative">
-        <video
-          src={videoSrc}
-          controls
-          autoPlay
-          className="h-full w-full object-contain"
-        />
-      </div>
+      <Suspense fallback={<div className="flex flex-1 items-center justify-center text-gray-500">Chargement du lecteur...</div>}>
+        <WatchPlayer />
+      </Suspense>
     </div>
   );
 }
