@@ -48,7 +48,7 @@ export default function MovieDetailPage() {
         </button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 space-y-8 pb-12">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">{info?.name || "Titre du film"}</h1>
           <div className="flex items-center gap-4 mt-3 text-sm text-gray-400">
@@ -127,13 +127,8 @@ export default function MovieDetailPage() {
           <div className="md:col-span-2 space-y-3">
             <h2 className="text-lg font-semibold text-gray-200">SYNOPSIS & HISTOIRE</h2>
             <p className="text-gray-400 leading-relaxed text-sm">
-              {info?.plot || info?.description || "Aucun synopsis disponible pour ce film."}
+              {info?.plot || info?.description || "Aucun synopsis disponible."}
             </p>
-            {info?.director && (
-              <p className="text-sm text-gray-400 pt-2">
-                <span className="text-gray-200 font-medium">Réalisateur :</span> {info.director}
-              </p>
-            )}
           </div>
 
           <div className="space-y-3">
@@ -149,7 +144,7 @@ export default function MovieDetailPage() {
                   </span>
                 ))
               ) : (
-                <span className="text-sm text-gray-500">Information non disponible</span>
+                <span className="text-sm text-gray-500">Non disponible</span>
               )}
             </div>
           </div>

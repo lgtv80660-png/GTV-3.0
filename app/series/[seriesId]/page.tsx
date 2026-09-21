@@ -15,31 +15,26 @@ export default function SeriesDetailPage() {
   const [activeTab, setActiveTab] = useState<"none" | "trailer" | "episode">("none");
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
 
-  // Chargement des données de la série
   const { data: seriesData, isLoading } = useSeriesInfo(seriesId);
 
   const info = seriesData?.info;
   const seasonsEpisodes = seriesData?.episodes || {};
 
-  // Saisons disponibles
   const seasons = useMemo(() => {
     return Object.keys(seasonsEpisodes)
       .map(Number)
       .sort((a, b) => a - b);
   }, [seasonsEpisodes]);
 
-  // Liste des épisodes pour la saison sélectionnée
   const episodesList = useMemo<Episode[]>(() => {
     return seasonsEpisodes[String(selectedSeason)] || [];
   }, [seasonsEpisodes, selectedSeason]);
 
-  // Lancer un épisode dans le mini-lecteur
   const handlePlayEpisode = (ep: Episode) => {
     setCurrentEpisode(ep);
     setActiveTab("episode");
   };
 
-  // URL du flux vidéo stream-vod pour la série
   const streamUrl = useMemo(() => {
     if (!currentEpisode) return "";
     const ext = currentEpisode.container_extension || "mp4";
@@ -58,7 +53,6 @@ export default function SeriesDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#0d0e12] text-white">
-      {/* Top Header */}
       <div className="p-6">
         <button
           onClick={() => router.back()}
@@ -69,7 +63,6 @@ export default function SeriesDetailPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 space-y-8 pb-12">
-        {/* Titre & Metadonnées */}
         <div>
           <h1 className="text-4xl font-bold tracking-tight">{info?.name || "Titre de la série"}</h1>
           <div className="flex items-center gap-4 mt-3 text-sm text-gray-400">
@@ -84,7 +77,6 @@ export default function SeriesDetailPage() {
           </div>
         </div>
 
-        {/* Boutons d'action rapides */}
         <div className="flex items-center gap-4">
           {episodesList.length > 0 && (
             <button
@@ -116,14 +108,13 @@ export default function SeriesDetailPage() {
                 )
               }
               className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-4 py-3 rounded-xl transition"
-              title="Ouvrir en plein écran sur /watch"
+              title="Plein écran"
             >
               <Maximize2 className="h-4 w-4" />
             </button>
           )}
         </div>
 
-        {/* MINI PLAYER DYNAMIQUE */}
         {activeTab !== "none" && (
           <div className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
             <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
@@ -158,7 +149,6 @@ export default function SeriesDetailPage() {
           </div>
         )}
 
-        {/* SECTION SELECTION DES SAISONS & EPISODES */}
         <div className="space-y-6 pt-4">
           <div className="flex items-center gap-3 overflow-x-auto pb-2 border-b border-white/10">
             {seasons.map((s) => (
@@ -176,7 +166,6 @@ export default function SeriesDetailPage() {
             ))}
           </div>
 
-          {/* Grille des Épisodes - Typer explicitement ep: Episode */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {episodesList.map((ep: Episode) => {
               const isSelected = currentEpisode?.id === ep.id && activeTab === "episode";
@@ -219,7 +208,6 @@ export default function SeriesDetailPage() {
           </div>
         </div>
 
-        {/* Synopsis & Acteurs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6 border-t border-white/10">
           <div className="md:col-span-2 space-y-3">
             <h2 className="text-lg font-semibold text-gray-200">SYNOPSIS</h2>
