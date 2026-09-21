@@ -16,7 +16,6 @@ const NO_CACHE_HEADERS = {
   "Access-Control-Allow-Origin": "*",
 };
 
-// Vérification rapide de la présence de la ressource sans bloquer la connexion
 async function checkUrl(url: string) {
   try {
     const controller = new AbortController();
@@ -48,7 +47,6 @@ export async function GET(req: Request) {
       return new Response("ID manquant", { status: 400, headers: NO_CACHE_HEADERS });
     }
 
-    // 1. Récupération des paramètres masqués transmis par le tremplin Vercel
     const directHost = searchParams.get("_h");
     const directUser = searchParams.get("_u");
     const directPass = searchParams.get("_p");
@@ -57,19 +55,17 @@ export async function GET(req: Request) {
     let u = "";
     let p = "";
 
-    // === SYSTEME TREMPLIN (VERCEL -> RAILWAY) ===
+    // === DOUBLE LOGIQUE : VERCEL (TREMPLIN) vs RAILWAY (FFMPEG) ===
     if (directHost && directUser && directPass) {
-      // Exécution sur RAILWAY
       rawHost = decodeURIComponent(directHost);
       u = decodeURIComponent(directUser);
       p = decodeURIComponent(directPass);
     } else {
-      // Exécution sur VERCEL
       let creds: any;
       try {
         creds = (await requireSession()) as any;
       } catch (e) {
-        return new Response("Non autorisé (Cookie manquant)", { status: 401, headers: NO_CACHE_HEADERS });
+        return new Response("Non autorisé", { status: 401, headers: NO_CACHE_HEADERS });
       }
 
       rawHost = creds.baseUrl || creds.url || creds.serverUrl || creds.server || creds.host || "";
@@ -78,11 +74,10 @@ export async function GET(req: Request) {
 
       const railwayUrl = `${RAILWAY_URL}/api/stream-vod?type=${type}&id=${id}&ext=${originalExt}&t=${t}&_h=${encodeURIComponent(rawHost)}&_u=${encodeURIComponent(u)}&_p=${encodeURIComponent(p)}`;
 
-      console.log(`[TREMPLIN VOD] Redirection Vercel -> Railway pour ${type} ID: ${id}`);
+      console.log(`[TREMPLIN VOD] Redirection Vercel -> Railway (${type}) ID: ${id}`);
       return NextResponse.redirect(railwayUrl, { status: 302 });
     }
 
-    // === EXECUTION SUR RAILWAY (FFMPEG NATIF) ===
     if (!rawHost) {
       return new Response("URL du serveur manquante", { status: 400, headers: NO_CACHE_HEADERS });
     }
@@ -92,7 +87,6 @@ export async function GET(req: Request) {
 
     let inputUrl = `${host}/${folder}/${encodeURIComponent(u)}/${encodeURIComponent(p)}/${id}.${originalExt}`;
 
-    // Test d'existence du fichier et bascule vers les extensions usuelles en cas d'erreur
     let isOk = await checkUrl(inputUrl);
     if (!isOk) {
       const fallbacks = ["mp4", "mkv", "avi", "ts"].filter((e) => e !== originalExt);
@@ -122,27 +116,16 @@ export async function GET(req: Request) {
 
     const ff = spawn(FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
 
-    ff.stderr.on("data", (d) => {
-      const s = String(d).trim();
-      if (s) console.log(`[FFMPEG VOD] ${s}`);
-    });
-
     const stream = new ReadableStream({
       start(controller) {
         ff.stdout.on("data", (chunk) => {
-          try {
-            if (controller.desiredSize !== null) controller.enqueue(chunk);
-          } catch {}
+          try { if (controller.desiredSize !== null) controller.enqueue(chunk); } catch {}
         });
         ff.stdout.on("end", () => {
-          try {
-            controller.close();
-          } catch {}
+          try { controller.close(); } catch {}
         });
         ff.on("error", (err) => {
-          try {
-            controller.error(err);
-          } catch {}
+          try { controller.error(err); } catch {}
         });
       },
       cancel() {
@@ -155,17 +138,9 @@ export async function GET(req: Request) {
     });
 
     return new Response(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "video/mp4",
-        "Accept-Ranges": "bytes",
-        "Connection": "keep-alive",
-        "Transfer-Encoding": "chunked",
-        ...NO_CACHE_HEADERS,
-      },
+      headers: { "content-type": "video/mp4", ...NO_CACHE_HEADERS },
     });
   } catch (err: any) {
-    console.error("[STREAM-VOD] Erreur :", err);
     return new Response(`Erreur VOD: ${err.message}`, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

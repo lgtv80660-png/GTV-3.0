@@ -1,147 +1,158 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { VideoPlayer } from "@/components/player/VideoPlayer";
-import { ArrowLeft, Play, Star, Calendar, Clock } from "lucide-react";
-import { cleanName, ratingNum, yearFrom } from "@/lib/utils";
+import { useState, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { Play, Film, Star, ArrowLeft, Maximize2, X, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
 
-export default function MovieDetailPage({ params }: { params: Promise<{ movieId: string }> }) {
-  const resolvedParams = use(params);
-  const movieId = resolvedParams.movieId;
+export default function MovieDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const movieId = String(params.id || "");
 
-  const [movieData, setMovieData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [activeTab, setActiveTab] = useState<"none" | "trailer" | "movie">("none");
 
-  useEffect(() => {
-    async function fetchMovieInfo() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch(`/api/movie-info?id=${movieId}`);
-        
-        if (!res.ok) {
-          throw new Error("Impossible de charger les informations du film.");
-        }
-        
-        const data = await res.json();
-        if (!data || (!data.info && !data.movie_data)) {
-          throw new Error("Données du film introuvables.");
-        }
+  const { data: movieData, isLoading } = useQuery({
+    queryKey: ["movie", "info", movieId],
+    queryFn: () => api.vodInfo(movieId),
+    enabled: !!movieId,
+  });
 
-        setMovieData(data);
-      } catch (err: any) {
-        console.error("Erreur chargement film:", err);
-        setError(err.message || "Impossible de charger ce film.");
-      } finally {
-        setLoading(false);
-      }
-    }
+  const info = (movieData?.info || movieData?.movie_data) as any;
+  const ext = (movieData?.movie_data as any)?.container_extension || "mp4";
 
-    if (movieId) {
-      fetchMovieInfo();
-    }
-  }, [movieId]);
+  const streamUrl = useMemo(() => {
+    if (!movieId) return "";
+    return `/api/stream-vod?type=movie&id=${movieId}&ext=${ext}`;
+  }, [movieId, ext]);
 
-  if (loading) {
+  const youtubeTrailerId = info?.youtube_trailer;
+
+  if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-black text-white">
-        <p className="text-sm font-medium animate-pulse">Chargement du film...</p>
+      <div className="flex h-screen w-full items-center justify-center bg-[#0d0e12] text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-purple-500" />
       </div>
     );
   }
 
-  if (error || !movieData) {
-    return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-black text-white p-6">
-        <p className="text-base font-semibold text-red-500 mb-4">{error || "Impossible de charger ce film."}</p>
+  return (
+    <div className="min-h-screen bg-[#0d0e12] text-white">
+      <div className="p-6">
         <button
-          onClick={() => window.history.back()}
-          className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20 transition-colors"
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition"
         >
-          <ArrowLeft className="h-4 w-4" /> Retour au catalogue
+          <ArrowLeft className="h-5 w-5" /> Retour
         </button>
       </div>
-    );
-  }
 
-  const info = movieData.info || movieData.movie_data || {};
-  const containerExt = info.container_extension || movieData.movie_data?.container_extension || "mp4";
-  
-  // ✅ Endpoint VOD FFmpeg obligatoire pour les films
-  const movieStreamUrl = `/api/stream-vod?type=movie&id=${movieId}&ext=${containerExt}`;
+      <div className="max-w-7xl mx-auto px-6 space-y-8">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">{info?.name || "Titre du film"}</h1>
+          <div className="flex items-center gap-4 mt-3 text-sm text-gray-400">
+            {info?.rating && (
+              <span className="flex items-center gap-1 text-yellow-400 font-medium">
+                <Star className="h-4 w-4 fill-yellow-400" />
+                {Number(info.rating).toFixed(1)}
+              </span>
+            )}
+            {info?.releasedate && <span>{info.releasedate.split("-")[0]}</span>}
+            {info?.genre && <span>• {info.genre}</span>}
+          </div>
+        </div>
 
-  // --- MODE LECTEUR VIDÉO ---
-  if (isPlaying) {
-    return (
-      <div className="relative h-screen w-screen bg-black">
-        <VideoPlayer
-          sources={[movieStreamUrl]}
-          ext={containerExt}
-          isLive={false}
-          title={cleanName(info.name || info.title)}
-          poster={info.movie_image || info.cover_big}
-          knownDuration={Number(info.duration_secs || 0)}
-          onBack={() => setIsPlaying(false)}
-        />
-      </div>
-    );
-  }
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setActiveTab("movie")}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold px-6 py-3 rounded-xl transition shadow-lg shadow-purple-900/30"
+          >
+            <Play className="h-5 w-5 fill-white" />
+            Play
+          </button>
 
-  // --- PAGE DÉTAILS FILM ---
-  return (
-    <div className="min-h-screen bg-zinc-950 text-white p-6 sm:p-10">
-      <button
-        onClick={() => window.history.back()}
-        className="mb-6 flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Retour
-      </button>
+          {youtubeTrailerId && (
+            <button
+              onClick={() => setActiveTab("trailer")}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-medium px-5 py-3 rounded-xl transition backdrop-blur-md"
+            >
+              <Film className="h-5 w-5" />
+              Bande-annonce
+            </button>
+          )}
 
-      <div className="flex flex-col md:flex-row gap-8 items-start max-w-6xl mx-auto">
-        {(info.movie_image || info.cover_big) && (
-          <img
-            src={info.movie_image || info.cover_big}
-            alt={info.name || "Affiche film"}
-            className="h-80 w-56 rounded-2xl object-cover shadow-2xl shrink-0"
-          />
+          <button
+            onClick={() => router.push(`/watch?type=movie&id=${movieId}&ext=${ext}`)}
+            className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-4 py-3 rounded-xl transition"
+            title="Plein écran"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        </div>
+
+        {activeTab !== "none" && (
+          <div className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+            <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
+              <span className="text-sm font-medium text-gray-300">
+                {activeTab === "movie" ? "FILM EN LECTURE" : "BANDE-ANNONCE"}
+              </span>
+              <button
+                onClick={() => setActiveTab("none")}
+                className="p-1.5 rounded-full bg-black/60 hover:bg-white/20 text-gray-300 hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {activeTab === "trailer" ? (
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeTrailerId}?autoplay=1`}
+                className="w-full h-full border-0"
+                allow="autoplay; encrypted-media"
+                allowFullScreen
+              />
+            ) : (
+              <video
+                src={streamUrl}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+            )}
+          </div>
         )}
 
-        <div className="flex-1">
-          <h1 className="text-3xl sm:text-4xl font-bold">{cleanName(info.name || info.title)}</h1>
-
-          <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-            {info.rating && (
-              <span className="flex items-center gap-1">
-                <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                {ratingNum(info.rating)}
-              </span>
-            )}
-            {info.releasedate && (
-              <span className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                {yearFrom(info.releasedate)}
-              </span>
-            )}
-            {info.duration && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                {info.duration}
-              </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
+          <div className="md:col-span-2 space-y-3">
+            <h2 className="text-lg font-semibold text-gray-200">SYNOPSIS & HISTOIRE</h2>
+            <p className="text-gray-400 leading-relaxed text-sm">
+              {info?.plot || info?.description || "Aucun synopsis disponible pour ce film."}
+            </p>
+            {info?.director && (
+              <p className="text-sm text-gray-400 pt-2">
+                <span className="text-gray-200 font-medium">Réalisateur :</span> {info.director}
+              </p>
             )}
           </div>
 
-          <p className="mt-6 text-sm text-zinc-300 leading-relaxed max-w-3xl">
-            {info.plot || info.description || "Aucun résumé disponible pour ce film."}
-          </p>
-
-          <button
-            onClick={() => setIsPlaying(true)}
-            className="mt-8 flex items-center gap-3 rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-indigo-500"
-          >
-            <Play className="h-5 w-5 fill-white" /> Regarder le film
-          </button>
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold text-gray-200">CASTING / ACTEURS</h2>
+            <div className="flex flex-wrap gap-2">
+              {info?.cast ? (
+                info.cast.split(",").map((actor: string, i: number) => (
+                  <span
+                    key={i}
+                    className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-xs text-gray-300"
+                  >
+                    {actor.trim()}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-gray-500">Information non disponible</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
