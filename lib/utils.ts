@@ -2,6 +2,11 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /**
+ * Type pour le tri dans les catalogues (CatalogBrowser)
+ */
+export type SortKey = "name_asc" | "name_desc" | "added_desc" | "rating_desc";
+
+/**
  * Fusionne les classes CSS Tailwind de manière conditionnelle et sans conflits
  */
 export function cn(...inputs: ClassValue[]) {
@@ -55,4 +60,38 @@ export function yearFrom(dateStr?: string | number, fallback: string = ""): stri
   const str = String(dateStr).trim();
   const match = str.match(/\b(19|20)\d{2}\b/);
   return match ? match[0] : (str || fallback);
+}
+
+/**
+ * Trie une liste d'éléments selon le critère sélectionné (sortKey)
+ */
+export function sortItems<T extends Record<string, any>>(items: T[], sortKey: SortKey): T[] {
+  if (!Array.isArray(items)) return [];
+
+  return [...items].sort((a, b) => {
+    switch (sortKey) {
+      case "name_asc": {
+        const nameA = cleanName(a.name || a.title || "");
+        const nameB = cleanName(b.name || b.title || "");
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+      }
+      case "name_desc": {
+        const nameA = cleanName(a.name || a.title || "");
+        const nameB = cleanName(b.name || b.title || "");
+        return nameB.localeCompare(nameA, undefined, { numeric: true, sensitivity: "base" });
+      }
+      case "added_desc": {
+        const dateA = Number(a.added || a.added_date || a.added_at || a.stream_id || 0);
+        const dateB = Number(b.added || b.added_date || b.added_at || b.stream_id || 0);
+        return dateB - dateA;
+      }
+      case "rating_desc": {
+        const ratingA = ratingNum(a.rating || a.rating_50 || a.score || 0);
+        const ratingB = ratingNum(b.rating || b.rating_50 || b.score || 0);
+        return ratingB - ratingA;
+      }
+      default:
+        return 0;
+    }
+  });
 }
