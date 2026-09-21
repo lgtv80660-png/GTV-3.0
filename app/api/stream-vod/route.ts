@@ -41,7 +41,6 @@ export async function GET(req: Request) {
       return new Response("Missing VOD Stream ID", { status: 400, headers: NO_CACHE_HEADERS });
     }
 
-    // Paramètres transmis lors du tremplin Vercel -> Railway
     const directHost = searchParams.get("_h");
     const directUser = searchParams.get("_u");
     const directPass = searchParams.get("_p");
@@ -52,12 +51,10 @@ export async function GET(req: Request) {
 
     // === SYSTEME TREMPLIN (VERCEL -> RAILWAY) ===
     if (directHost && directUser && directPass) {
-      // Exécution directe sur RAILWAY
       rawHost = decodeURIComponent(directHost);
       u = decodeURIComponent(directUser);
       p = decodeURIComponent(directPass);
     } else {
-      // Exécution sur VERCEL (Lecture de la session cookie et redirection)
       let creds: any;
       try {
         creds = (await requireSession()) as any;
@@ -112,7 +109,7 @@ export async function GET(req: Request) {
       "pipe:1",
     ];
 
-    const ff = spawn(FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const ff = spawn(/*turbopackIgnore: true*/ FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
 
     ff.stderr.on("data", (d) => {
       const s = String(d).trim();
