@@ -1,12 +1,14 @@
 import { spawn } from "node:child_process";
 import { requireSession } from "@/lib/session";
 import { NextResponse } from "next/server";
+import ffmpegPath from "ffmpeg-static";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UA = "VLC/3.0.20 LibVLC/3.0.20";
-const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
+// Utilise le binaire de ffmpeg-static si FFMPEG_PATH n'est pas explicite dans l'environnement
+const FFMPEG = process.env.FFMPEG_PATH || ffmpegPath || "ffmpeg";
 const RAILWAY_URL = process.env.RAILWAY_PUBLIC_URL || "https://gtv-30-production.up.railway.app";
 
 const NO_CACHE_HEADERS = {
@@ -109,11 +111,12 @@ export async function GET(req: Request) {
       "pipe:1",
     ];
 
+    console.log(`[FFMPEG SPAWN] Path: ${FFMPEG}`);
     const ff = spawn(/*turbopackIgnore: true*/ FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
 
     ff.stderr.on("data", (d) => {
       const s = String(d).trim();
-      if (s) console.log(`[FFMPEG VOD] ${s}`);
+      if (s) console.log(`[FFMPEG VOD LOG] ${s}`);
     });
 
     const stream = new ReadableStream({
