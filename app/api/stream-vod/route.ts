@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
 import { requireSession } from "@/lib/session";
 import { NextResponse } from "next/server";
+// @ts-ignore
 import ffmpegPath from "ffmpeg-static";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UA = "VLC/3.0.20 LibVLC/3.0.20";
-// Utilise le binaire de ffmpeg-static si FFMPEG_PATH n'est pas explicite dans l'environnement
 const FFMPEG = process.env.FFMPEG_PATH || ffmpegPath || "ffmpeg";
 const RAILWAY_URL = process.env.RAILWAY_PUBLIC_URL || "https://gtv-30-production.up.railway.app";
 
@@ -20,11 +20,17 @@ const NO_CACHE_HEADERS = {
 
 async function checkUrl(url: string) {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+
     const res = await fetch(url, {
-      method: "GET",
-      headers: { "User-Agent": UA, "Range": "bytes=0-100" },
+      method: "HEAD",
+      headers: { "User-Agent": UA },
+      signal: controller.signal,
     });
-    return res.ok || res.status === 206;
+
+    clearTimeout(timer);
+    return res.ok || res.status === 206 || res.status === 302;
   } catch {
     return false;
   }
@@ -79,20 +85,13 @@ export async function GET(req: Request) {
     const folder = type === "series" ? "series" : "movie";
 
     let inputUrl = `${host}/${folder}/${encodeURIComponent(u)}/${encodeURIComponent(p)}/${id}.${originalExt}`;
-    console.log(`[VOD RAILWAY] Vérification flux : ${inputUrl}`);
+    console.log(`[VOD RAILWAY] Flux cible : ${inputUrl}`);
 
-    let isOk = await checkUrl(inputUrl);
-
-    if (!isOk) {
-      console.log(`[VOD RAILWAY] Extension .${originalExt} introuvable, test des fallback...`);
-      const fallbacks = ["mp4", "mkv", "avi", "ts"].filter((e) => e !== originalExt);
-      for (const altExt of fallbacks) {
-        const altUrl = `${host}/${folder}/${encodeURIComponent(u)}/${encodeURIComponent(p)}/${id}.${altExt}`;
-        if (await checkUrl(altUrl)) {
-          inputUrl = altUrl;
-          isOk = true;
-          break;
-        }
+    const isOk = await checkUrl(inputUrl);
+    if (!isOk && originalExt !== "mkv") {
+      const fallbackUrl = `${host}/${folder}/${encodeURIComponent(u)}/${encodeURIComponent(p)}/${id}.mkv`;
+      if (await checkUrl(fallbackUrl)) {
+        inputUrl = fallbackUrl;
       }
     }
 
@@ -111,12 +110,11 @@ export async function GET(req: Request) {
       "pipe:1",
     ];
 
-    console.log(`[FFMPEG SPAWN] Path: ${FFMPEG}`);
     const ff = spawn(/*turbopackIgnore: true*/ FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
 
     ff.stderr.on("data", (d) => {
       const s = String(d).trim();
-      if (s) console.log(`[FFMPEG VOD LOG] ${s}`);
+      if (s) console.log(`[FFMPEG VOD] ${s}`);
     });
 
     const stream = new ReadableStream({
