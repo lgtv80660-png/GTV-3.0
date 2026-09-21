@@ -4,49 +4,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Star, Calendar, Clock, User, Info, Maximize, Play } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { DetailHero } from "@/components/catalog/DetailHero";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { useLibrary } from "@/store/library";
 import { ratingNum, yearFrom, cleanName, cn } from "@/lib/utils";
-
-function useVodInfo(id: string) {
-  const [data, setData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
-
-  useEffect(() => {
-    if (!id) {
-      setIsLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-    setIsError(false);
-
-    fetch(`/api/vod-info?id=${encodeURIComponent(id)}`)
-      .then((response) => {
-        if (!response.ok) throw new Error("Failed to load movie information");
-        return response.json();
-      })
-      .then((result) => {
-        if (!cancelled) setData(result);
-      })
-      .catch(() => {
-        if (!cancelled) setIsError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  return { data, isLoading, isError };
-}
 
 const FlipActorCard = ({ name }: { name: string }) => {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -112,23 +75,39 @@ const FlipActorCard = ({ name }: { name: string }) => {
 
 export default function MovieDetailPage() {
   const params = useParams();
-  // Support pour [movieId] ou [id]
   const id = (params?.movieId || params?.id) as string;
 
-  const { data, isLoading, isError } = useVodInfo(id);
+  // L'arme secrète pour la vitesse : React Query avec cache de 10 minutes et double fallback API
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["movie-info", id],
+    queryFn: async () => {
+      // 1. On tente la route API des films (avec id et vod_id au cas où)
+      let res = await fetch(`/api/movie-info?id=${id}&vod_id=${id}`);
+      
+      // 2. Si ça échoue, on tente d'appeler directement la route Xtream brute
+      if (!res.ok) {
+        res = await fetch(`/api/xtream?action=get_vod_info&vod_id=${id}`);
+      }
+      
+      if (!res.ok) throw new Error("Impossible de charger les données");
+      return res.json();
+    },
+    enabled: !!id,
+    staleTime: 10 * 60 * 1000, // Les données restent en cache 10 minutes (Ultra Rapide)
+  });
+
   const { isFav, toggleFav } = useLibrary();
 
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const actorScrollRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
 
-  // === DRAG HORIZONTAL TACTILE POUR PC (Acteurs) ===
+  // === DRAG HORIZONTAL TACTILE POUR PC ===
   const isDragX = useRef(false);
   const startX = useRef(0);
   const scrollLeft = useRef(0);
   const [isDraggingX, setIsDraggingX] = useState(false);
 
-  // Typage en "any" pour éviter les erreurs TS strictes avec useRef
   const onMouseDownX = (e: React.MouseEvent<HTMLDivElement>, ref: any) => {
     if (!ref.current) return;
     isDragX.current = true;
@@ -184,7 +163,6 @@ export default function MovieDetailPage() {
   if (isError || !data || !id)
     return <p className="px-8 py-24 text-center text-red-300">Impossible de charger le film.</p>;
 
-  // L'API Xtream renvoie souvent les infos dans info ou movie_data
   const info = data?.info || data?.movie_data || data || {};
   const title = (info?.name as string) || (info?.title as string) || "Film";
   const rating = ratingNum(info?.rating);
