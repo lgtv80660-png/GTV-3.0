@@ -16,6 +16,42 @@ const smoothTransition: Transition = {
   ease: [0.16, 1, 0.3, 1] as const,
 };
 
+// --- COMPOSANT LOGO TRANSPARENT ---
+const ClearLogo = ({ title, tmdbId, type = "movie" }: { title: string, tmdbId?: string | number, type?: "movie" | "tv" }) => {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let url = `/api/title-logo?title=${encodeURIComponent(title)}&type=${type}`;
+    if (tmdbId) url += `&tmdbId=${tmdbId}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.logoUrl) setLogoUrl(data.logoUrl);
+      })
+      .catch(() => {});
+  }, [title, tmdbId, type]);
+
+  if (logoUrl) {
+    return (
+      <motion.img 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        src={logoUrl} 
+        alt={title} 
+        className="max-w-[280px] sm:max-w-[420px] max-h-[160px] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.9)] mb-2" 
+      />
+    );
+  }
+  
+  return (
+    <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
+      {cleanName(title)}
+    </h1>
+  );
+};
+// ----------------------------------
+
 const FlipActorCard = ({ name }: { name: string }) => {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [bio, setBio] = useState<string>("Chargement...");
@@ -82,18 +118,22 @@ export default function MovieDetailPage() {
   const params = useParams();
   const id = (params?.movieId || params?.id) as string;
 
-  // Gestion du mode de lecteur (Rien, Film complet, ou Bande-annonce)
   const [playerMode, setPlayerMode] = useState<"none" | "movie" | "trailer">("none");
 
+  // Chargement ultra-rapide avec Promise.any
   const { data, isLoading, isError } = useQuery({
     queryKey: ["movie-info", id],
     queryFn: async () => {
-      let res = await fetch(`/api/movie-info?id=${id}&vod_id=${id}`);
-      if (!res.ok) {
-        res = await fetch(`/api/xtream?action=get_vod_info&vod_id=${id}`);
-      }
-      if (!res.ok) throw new Error("Impossible de charger les données");
-      return res.json();
+      const fetch1 = fetch(`/api/movie-info?id=${id}&vod_id=${id}`).then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      });
+      const fetch2 = fetch(`/api/xtream?action=get_vod_info&vod_id=${id}`).then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      });
+
+      return await Promise.any([fetch1, fetch2]);
     },
     enabled: !!id,
     staleTime: 10 * 60 * 1000,
@@ -105,7 +145,6 @@ export default function MovieDetailPage() {
   const actorScrollRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
 
-  // Drag Horizontal
   const isDragX = useRef(false);
   const startX = useRef(0);
   const scrollLeft = useRef(0);
@@ -168,14 +207,12 @@ export default function MovieDetailPage() {
   const info = data?.info || {};
   const movieData = data?.movie_data || {};
   
-  // Correction du Titre pour éviter "Film"
   const title = movieData?.name || info?.name || info?.title || movieData?.title || "Film Inconnu";
   const rating = ratingNum(info?.rating);
   const year = yearFrom(info?.releaseDate || info?.releasedate, title);
   const fav = isFav("movies", Number(id));
   const ext = info?.container_extension || movieData?.container_extension || "mp4";
   
-  // Récupération de la bande annonce
   const youtubeTrailer = info?.youtube_trailer || movieData?.youtube_trailer;
 
   const castList = info?.cast
@@ -203,9 +240,9 @@ export default function MovieDetailPage() {
       >
         <div className="space-y-5 max-w-4xl">
           <div>
-            <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
-              {cleanName(title)}
-            </h1>
+            {/* 🔴 C'est ici qu'on utilise le nouveau composant ClearLogo */}
+            <ClearLogo title={title} tmdbId={info?.tmdb_id || movieData?.tmdb_id} type="movie" />
+            
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-fog-200">
               {rating > 0 && (
                 <span className="flex items-center gap-1 font-bold text-yellow-400 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm">
@@ -226,7 +263,6 @@ export default function MovieDetailPage() {
             </div>
           </div>
 
-          {/* BOUTONS D'ACTION (Apparaissent quand le lecteur est fermé) */}
           <AnimatePresence>
             {playerMode === "none" && (
               <motion.div
@@ -265,13 +301,11 @@ export default function MovieDetailPage() {
         </div>
       </DetailHero>
 
-      {/* ZONE DYNAMIQUE (Lecteur + Infos) */}
       <motion.div
         layout="position"
         transition={smoothTransition}
         className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start relative w-full pt-2"
       >
-        {/* LECTEUR VIDÉO OU TRAILER (50% de largeur) */}
         <AnimatePresence mode="popLayout">
           {playerMode !== "none" && (
             <motion.div
@@ -338,7 +372,6 @@ export default function MovieDetailPage() {
           )}
         </AnimatePresence>
 
-        {/* COLONNE DES INFORMATIONS (Passe à 50% quand le lecteur est ouvert) */}
         <motion.div
           layout="position"
           transition={smoothTransition}
@@ -347,7 +380,6 @@ export default function MovieDetailPage() {
             playerMode !== "none" ? "lg:w-[50%]" : "lg:w-full"
           )}
         >
-          {/* CARTE SYNOPSIS */}
           <div className="bg-[#181a24] border border-white/5 rounded-2xl p-4 sm:p-6 shadow-lg">
             <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-3">
               <BookOpen className="w-4 h-4 text-iris-400" /> Synopsis & Histoire
@@ -362,7 +394,6 @@ export default function MovieDetailPage() {
             )}
           </div>
 
-          {/* CARTE CASTING */}
           {castList.length > 0 && (
             <div className="bg-[#181a24] border border-white/5 rounded-2xl p-4 sm:p-6 shadow-lg">
               <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
