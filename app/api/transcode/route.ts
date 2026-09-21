@@ -1,103 +1,66 @@
-import { spawn } from "node:child_process";
 import { requireSession } from "@/lib/session";
-import type { StreamKind } from "@/lib/xtream/types";
+import { buildStreamUrl } from "@/lib/xtream/urls";
+import { spawn } from "child_process";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const UA = "VLC/3.0.20 LibVLC/3.0.20";
-const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
-
 export async function GET(req: Request) {
-  let creds: any;
+  let sessionData: any;
   try {
-    creds = await requireSession();
+    sessionData = await requireSession();
   } catch {
-    return new Response("Not authenticated", { status: 401 });
+    return new Response("Non authentifié", { status: 401 });
   }
 
+  const creds = sessionData?.user || sessionData;
   const { searchParams } = new URL(req.url);
-  const type = (searchParams.get("type") as StreamKind) || "series";
+  const type = searchParams.get("type") || "series";
   const id = searchParams.get("id");
-  const ext = searchParams.get("ext") || "mp4";
-  const start = Math.max(0, Math.floor(Number(searchParams.get("t") || 0)));
+  const ext = searchParams.get("ext") || "mkv";
 
-  if (!type || !id) return new Response("Bad request", { status: 400 });
+  if (!id) return new Response("ID manquant", { status: 400 });
 
-  const baseUrl = (creds.baseUrl || creds.host || creds.serverUrl || "").replace(/\/+$/, "");
-  const username = creds.username;
-  const password = creds.password;
+  // Sécurité : Vérification et reconstruction stricte de l'URL du fournisseur IPTV
+  const upstreamUrl = buildStreamUrl(creds, type, id, ext);
 
-  if (!baseUrl || !username || !password) {
-    return new Response("Session / Credentials Xtream invalides", { status: 500 });
+  // Vérification que l'URL ne pointe pas sur Vercel
+  if (upstreamUrl.includes("vercel.app")) {
+    console.error("Erreur de configuration baseUrl Xtream:", upstreamUrl);
+    return new Response("Configuration du serveur Xtream invalide", { status: 500 });
   }
 
-  // URL source VOD (movie ou series)
-  const input = `${baseUrl}/${type}/${username}/${password}/${id}.${ext}`;
+  console.log("Lecture du flux source IPTV :", upstreamUrl);
 
-  // FFmpeg Remux : Copie vidéo (0% CPU) + Audio AAC pour compatibilité web
-  const args = [
-    "-hide_banner",
-    "-loglevel", "error",
-    "-probesize", "32M",
-    "-analyzeduration", "32M",
-    "-user_agent", UA,
-    ...(start > 0 ? ["-ss", String(start)] : []),
-    "-i", input,
-    "-map", "0:v:0?",
-    "-map", "0:a:0?",
+  const ffmpeg = spawn("ffmpeg", [
+    "-headers", "User-Agent: VLC/3.0.20 LibVLC/3.0.20\r\n",
+    "-i", upstreamUrl,
     "-c:v", "copy",
     "-c:a", "aac",
-    "-ac", "2",
     "-b:a", "128k",
-    "-sn",
-    "-movflags", "frag_keyframe+empty_moov+default_base_moof+omit_tfhd_offset",
+    "-movflags", "frag_keyframe+empty_moov+default_base_moof",
     "-f", "mp4",
-    "pipe:1",
-  ];
-
-  console.log(`[TRANSCODE] ${type}/${id} ext=${ext} t=${start} -> remuxing via ffmpeg`);
-  const ff = spawn(FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
-
-  ff.stderr.on("data", (d) => {
-    const s = String(d).trim();
-    if (s) console.log(`[TRANSCODE] ${type}/${id} ffmpeg: ${s}`);
-  });
+    "pipe:1"
+  ]);
 
   const stream = new ReadableStream({
     start(controller) {
-      ff.stdout.on("data", (chunk) => {
-        try {
-          if (controller.desiredSize !== null) {
-            controller.enqueue(chunk);
-          }
-        } catch {}
-      });
-
-      ff.stdout.on("end", () => {
-        try { controller.close(); } catch {}
-      });
-
-      ff.on("error", (err) => {
-        try { controller.error(err); } catch {}
-      });
+      ffmpeg.stdout.on("data", (chunk) => controller.enqueue(chunk));
+      ffmpeg.stdout.on("end", () => controller.close());
+      ffmpeg.stderr.on("data", (data) => console.log("FFmpeg stderr:", data.toString()));
+      ffmpeg.on("error", (err) => controller.error(err));
     },
     cancel() {
-      if (!ff.killed) ff.kill("SIGKILL");
-    },
-  });
-
-  req.signal.addEventListener("abort", () => {
-    if (!ff.killed) ff.kill("SIGKILL");
+      ffmpeg.kill("SIGKILL");
+    }
   });
 
   return new Response(stream, {
+    status: 200,
     headers: {
       "Content-Type": "video/mp4",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Pragma": "no-cache",
-      "Expires": "0",
-      "Connection": "keep-alive",
+      "Cache-Control": "no-cache",
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }
