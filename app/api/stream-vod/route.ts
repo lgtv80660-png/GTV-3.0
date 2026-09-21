@@ -114,7 +114,7 @@ export async function GET(req: Request) {
       "pipe:1",
     ];
 
-    const ff = spawn(FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const ff = spawn(/*turbopackIgnore: true*/ FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
 
     const stream = new ReadableStream({
       start(controller) {
