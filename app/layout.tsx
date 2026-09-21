@@ -19,8 +19,7 @@ export default function RootLayout({
   return (
     <html lang="fr" className="dark">
       {/* Correction appliquée sur la ligne suivante : ajout des backticks */}
-      <body className={${inter.className} bg-background text-white antialiased overflow-hidden select-none}>
-        <Providers>
+<body className={`${inter.className} bg-background text-white antialiased overflow-hidden select-none`}>        <Providers>
           <div className="flex h-screen w-full relative">
             
             <Navigation/>
