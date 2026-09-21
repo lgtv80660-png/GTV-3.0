@@ -79,3 +79,10 @@ export function sortItems<T extends Record<string, any>>(
     return 0;
   });
 }
+export const ratingNum = (rating: any) => Number(rating) || 0;
+
+export const yearFrom = (date: any, fallbackTitle?: string) => {
+  if (date) return String(date).substring(0, 4);
+  const match = fallbackTitle?.match(/\((\d{4})\)/);
+  return match ? match[1] : "";
+};
