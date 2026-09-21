@@ -82,8 +82,8 @@ export default function MovieDetailPage() {
   const params = useParams();
   const id = (params?.movieId || params?.id) as string;
 
-  // État pour afficher ou masquer le lecteur
-  const [isPlaying, setIsPlaying] = useState(false);
+  // Gestion du mode de lecteur (Rien, Film complet, ou Bande-annonce)
+  const [playerMode, setPlayerMode] = useState<"none" | "movie" | "trailer">("none");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["movie-info", id],
@@ -165,12 +165,18 @@ export default function MovieDetailPage() {
   if (isError || !data || !id)
     return <p className="px-8 py-24 text-center text-red-300">Impossible de charger le film.</p>;
 
-  const info = data?.info || data?.movie_data || data || {};
-  const title = (info?.name as string) || (info?.title as string) || "Film";
+  const info = data?.info || {};
+  const movieData = data?.movie_data || {};
+  
+  // Correction du Titre pour éviter "Film"
+  const title = movieData?.name || info?.name || info?.title || movieData?.title || "Film Inconnu";
   const rating = ratingNum(info?.rating);
   const year = yearFrom(info?.releaseDate || info?.releasedate, title);
   const fav = isFav("movies", Number(id));
-  const ext = info?.container_extension || data?.movie_data?.container_extension || "mp4";
+  const ext = info?.container_extension || movieData?.container_extension || "mp4";
+  
+  // Récupération de la bande annonce
+  const youtubeTrailer = info?.youtube_trailer || movieData?.youtube_trailer;
 
   const castList = info?.cast
     ? info.cast.split(",").map((actor: string) => actor.trim()).filter(Boolean)
@@ -188,11 +194,11 @@ export default function MovieDetailPage() {
       {/* HERO BANNIÈRE */}
       <DetailHero
         backdrop={info?.backdrop_path?.[0] || info?.backdrop}
-        poster={info?.cover || info?.movie_image}
+        poster={info?.cover || movieData?.movie_image}
         title={title}
         fav={fav}
         onToggleFav={() =>
-          toggleFav("movies", { id: Number(id), name: cleanName(title), poster: info?.cover || info?.movie_image })
+          toggleFav("movies", { id: Number(id), name: cleanName(title), poster: info?.cover || movieData?.movie_image })
         }
       >
         <div className="space-y-5 max-w-4xl">
@@ -220,9 +226,9 @@ export default function MovieDetailPage() {
             </div>
           </div>
 
-          {/* BOUTONS D'ACTION (Apparaissent quand le film n'est pas lancé) */}
+          {/* BOUTONS D'ACTION (Apparaissent quand le lecteur est fermé) */}
           <AnimatePresence>
-            {!isPlaying && (
+            {playerMode === "none" && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -230,19 +236,29 @@ export default function MovieDetailPage() {
                 className="flex items-center gap-3 pt-2"
               >
                 <button
-                  onClick={() => setIsPlaying(true)}
+                  onClick={() => setPlayerMode("movie")}
                   className="bg-iris-600 hover:bg-iris-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] transform hover:scale-105"
                 >
                   <Play className="w-5 h-5 fill-white" /> Play
                 </button>
-                <a
-                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanName(title) + " trailer bande annonce")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-ink-900/80 hover:bg-ink-800 border border-white/10 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors backdrop-blur-md"
-                >
-                  <Film className="w-5 h-5 text-red-500" /> Bande-annonce
-                </a>
+                
+                {youtubeTrailer ? (
+                  <button
+                    onClick={() => setPlayerMode("trailer")}
+                    className="bg-ink-900/80 hover:bg-ink-800 border border-white/10 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors backdrop-blur-md"
+                  >
+                    <Film className="w-5 h-5 text-red-500" /> Bande-annonce
+                  </button>
+                ) : (
+                  <a
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanName(title) + " trailer bande annonce")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-ink-900/80 hover:bg-ink-800 border border-white/10 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors backdrop-blur-md"
+                  >
+                    <Film className="w-5 h-5 text-red-500" /> Rechercher Bande-annonce
+                  </a>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -255,31 +271,33 @@ export default function MovieDetailPage() {
         transition={smoothTransition}
         className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start relative w-full pt-2"
       >
-        {/* LECTEUR VIDÉO (Apparaît si isPlaying est true) */}
+        {/* LECTEUR VIDÉO OU TRAILER (50% de largeur) */}
         <AnimatePresence mode="popLayout">
-          {isPlaying && (
+          {playerMode !== "none" && (
             <motion.div
               key="movie-player"
               initial={{ opacity: 0, scale: 0.95, x: -20 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.95, x: -20 }}
               transition={smoothTransition}
-              className="w-full lg:w-[60%] shrink-0 space-y-2.5 bg-[#12141c] border border-white/10 rounded-2xl p-3 sm:p-4 sticky top-4 z-40 shadow-2xl"
+              className="w-full lg:w-[50%] shrink-0 space-y-2.5 bg-[#12141c] border border-white/10 rounded-2xl p-3 sm:p-4 sticky top-4 z-40 shadow-2xl"
             >
               <div className="flex items-center justify-between px-1">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-iris-400 truncate max-w-[70%]">
-                  {cleanName(title)}
+                  {cleanName(title)} {playerMode === "trailer" && " - Bande-annonce"}
                 </h2>
                 <div className="flex items-center gap-1">
+                  {playerMode === "movie" && (
+                    <button
+                      onClick={handleFullscreenLandscape}
+                      className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+                      title="Plein Écran Horizontal"
+                    >
+                      <Maximize className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
-                    onClick={handleFullscreenLandscape}
-                    className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
-                    title="Plein Écran Horizontal"
-                  >
-                    <Maximize className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setIsPlaying(false)}
+                    onClick={() => setPlayerMode("none")}
                     className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
                     title="Fermer"
                   >
@@ -293,31 +311,40 @@ export default function MovieDetailPage() {
                 onClick={handleDoubleTap}
                 className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/5 cursor-pointer shadow-inner"
               >
-                <div className="absolute inset-0 flex items-center justify-center [&>div]:w-full [&>div]:h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain">
-                  <VideoPlayer
-                    key={id}
-                    sources={[
-                      ext === "mp4"
-                        ? `/api/stream-vod?type=movie&id=${id}&ext=mp4`
-                        : `/api/transcode?type=movie&id=${id}&ext=${ext}`
-                    ]}
-                    ext={ext}
-                    isLive={false}
-                    title={cleanName(title)}
+                {playerMode === "movie" ? (
+                  <div className="absolute inset-0 flex items-center justify-center [&>div]:w-full [&>div]:h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain">
+                    <VideoPlayer
+                      key={id}
+                      sources={[
+                        ext === "mp4"
+                          ? `/api/stream-vod?type=movie&id=${id}&ext=mp4`
+                          : `/api/transcode?type=movie&id=${id}&ext=${ext}`
+                      ]}
+                      ext={ext}
+                      isLive={false}
+                      title={cleanName(title)}
+                    />
+                  </div>
+                ) : (
+                  <iframe 
+                    src={`https://www.youtube.com/embed/${youtubeTrailer}?autoplay=1`}
+                    className="w-full h-full border-0"
+                    allow="autoplay; encrypted-media; fullscreen"
+                    allowFullScreen
                   />
-                </div>
+                )}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* COLONNE DES INFORMATIONS (Synopsis & Casting) */}
+        {/* COLONNE DES INFORMATIONS (Passe à 50% quand le lecteur est ouvert) */}
         <motion.div
           layout="position"
           transition={smoothTransition}
           className={cn(
             "flex-1 w-full space-y-4 sm:space-y-6 transition-all duration-500",
-            isPlaying ? "lg:w-[40%]" : "lg:w-full"
+            playerMode !== "none" ? "lg:w-[50%]" : "lg:w-full"
           )}
         >
           {/* CARTE SYNOPSIS */}
@@ -371,7 +398,7 @@ function MovieSkeleton() {
         <div className="flex-1 space-y-4">
           <Skeleton className="h-10 w-2/3" />
           <Skeleton className="h-6 w-1/3" />
-          <Skeleton className="h-12 w-40 mt-4" /> {/* Fake buttons */}
+          <Skeleton className="h-12 w-40 mt-4" />
         </div>
       </div>
       <div className="mt-12 space-y-6">
