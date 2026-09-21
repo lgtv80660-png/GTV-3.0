@@ -2,14 +2,19 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Star, Calendar, Clock, User, Info, Maximize, Play } from "lucide-react";
-import { motion } from "framer-motion";
+import { Star, Calendar, Clock, User, Info, Maximize, Play, Film, X, BookOpen } from "lucide-react";
+import { motion, AnimatePresence, Transition } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { DetailHero } from "@/components/catalog/DetailHero";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { useLibrary } from "@/store/library";
 import { ratingNum, yearFrom, cleanName, cn } from "@/lib/utils";
+
+const smoothTransition: Transition = {
+  duration: 0.6,
+  ease: [0.16, 1, 0.3, 1] as const,
+};
 
 const FlipActorCard = ({ name }: { name: string }) => {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -77,23 +82,21 @@ export default function MovieDetailPage() {
   const params = useParams();
   const id = (params?.movieId || params?.id) as string;
 
-  // L'arme secrète pour la vitesse : React Query avec cache de 10 minutes et double fallback API
+  // État pour afficher ou masquer le lecteur
+  const [isPlaying, setIsPlaying] = useState(false);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["movie-info", id],
     queryFn: async () => {
-      // 1. On tente la route API des films (avec id et vod_id au cas où)
       let res = await fetch(`/api/movie-info?id=${id}&vod_id=${id}`);
-      
-      // 2. Si ça échoue, on tente d'appeler directement la route Xtream brute
       if (!res.ok) {
         res = await fetch(`/api/xtream?action=get_vod_info&vod_id=${id}`);
       }
-      
       if (!res.ok) throw new Error("Impossible de charger les données");
       return res.json();
     },
     enabled: !!id,
-    staleTime: 10 * 60 * 1000, // Les données restent en cache 10 minutes (Ultra Rapide)
+    staleTime: 10 * 60 * 1000,
   });
 
   const { isFav, toggleFav } = useLibrary();
@@ -102,7 +105,7 @@ export default function MovieDetailPage() {
   const actorScrollRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
 
-  // === DRAG HORIZONTAL TACTILE POUR PC ===
+  // Drag Horizontal
   const isDragX = useRef(false);
   const startX = useRef(0);
   const scrollLeft = useRef(0);
@@ -142,7 +145,6 @@ export default function MovieDetailPage() {
       } else if ((elem as any).webkitRequestFullscreen) {
         await (elem as any).webkitRequestFullscreen();
       }
-
       if (window.screen?.orientation && "lock" in window.screen.orientation) {
         await (window.screen.orientation as any).lock("landscape").catch(() => {});
       }
@@ -183,7 +185,7 @@ export default function MovieDetailPage() {
         .rotate-y-180 { transform: rotateY(180deg); }
       `}</style>
 
-      {/* HERO BANNIÈRE & INFOS */}
+      {/* HERO BANNIÈRE */}
       <DetailHero
         backdrop={info?.backdrop_path?.[0] || info?.backdrop}
         poster={info?.cover || info?.movie_image}
@@ -193,39 +195,151 @@ export default function MovieDetailPage() {
           toggleFav("movies", { id: Number(id), name: cleanName(title), poster: info?.cover || info?.movie_image })
         }
       >
-        <div className="space-y-4 max-w-4xl">
+        <div className="space-y-5 max-w-4xl">
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">{cleanName(title)}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-fog-300">
+            <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
+              {cleanName(title)}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-fog-200">
               {rating > 0 && (
-                <span className="flex items-center gap-1 font-semibold text-iris-300">
-                  <Star className="h-4 w-4 fill-iris-300" /> {rating.toFixed(1)}
+                <span className="flex items-center gap-1 font-bold text-yellow-400 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm">
+                  <Star className="h-4 w-4 fill-yellow-400" /> {rating.toFixed(1)}
                 </span>
               )}
               {year && (
                 <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" /> {year}
+                  <Calendar className="h-4 w-4 opacity-70" /> {year}
                 </span>
               )}
-              {info?.genre && <span className="text-fog-400">{info.genre}</span>}
+              {info?.genre && <span className="opacity-90">{info.genre}</span>}
               {info?.duration && (
-                <span className="flex items-center gap-1 text-fog-400">
-                  <Clock className="w-3.5 h-3.5" /> {info.duration}
+                <span className="flex items-center gap-1 opacity-90">
+                  <Clock className="w-4 h-4 opacity-70" /> {info.duration}
                 </span>
               )}
             </div>
           </div>
 
-          {(info?.plot || info?.description) && (
-            <p className="text-xs sm:text-sm leading-relaxed text-fog-300 font-light line-clamp-3 sm:line-clamp-none">
-              {info.plot || info.description}
-            </p>
-          )}
+          {/* BOUTONS D'ACTION (Apparaissent quand le film n'est pas lancé) */}
+          <AnimatePresence>
+            {!isPlaying && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                className="flex items-center gap-3 pt-2"
+              >
+                <button
+                  onClick={() => setIsPlaying(true)}
+                  className="bg-iris-600 hover:bg-iris-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] transform hover:scale-105"
+                >
+                  <Play className="w-5 h-5 fill-white" /> Play
+                </button>
+                <a
+                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanName(title) + " trailer bande annonce")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-ink-900/80 hover:bg-ink-800 border border-white/10 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors backdrop-blur-md"
+                >
+                  <Film className="w-5 h-5 text-red-500" /> Bande-annonce
+                </a>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </DetailHero>
 
+      {/* ZONE DYNAMIQUE (Lecteur + Infos) */}
+      <motion.div
+        layout="position"
+        transition={smoothTransition}
+        className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start relative w-full pt-2"
+      >
+        {/* LECTEUR VIDÉO (Apparaît si isPlaying est true) */}
+        <AnimatePresence mode="popLayout">
+          {isPlaying && (
+            <motion.div
+              key="movie-player"
+              initial={{ opacity: 0, scale: 0.95, x: -20 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.95, x: -20 }}
+              transition={smoothTransition}
+              className="w-full lg:w-[60%] shrink-0 space-y-2.5 bg-[#12141c] border border-white/10 rounded-2xl p-3 sm:p-4 sticky top-4 z-40 shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-iris-400 truncate max-w-[70%]">
+                  {cleanName(title)}
+                </h2>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleFullscreenLandscape}
+                    className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+                    title="Plein Écran Horizontal"
+                  >
+                    <Maximize className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setIsPlaying(false)}
+                    className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+                    title="Fermer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                ref={playerContainerRef}
+                onClick={handleDoubleTap}
+                className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/5 cursor-pointer shadow-inner"
+              >
+                <div className="absolute inset-0 flex items-center justify-center [&>div]:w-full [&>div]:h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain">
+                  <VideoPlayer
+                    key={id}
+                    sources={[
+                      ext === "mp4"
+                        ? `/api/stream-vod?type=movie&id=${id}&ext=mp4`
+                        : `/api/transcode?type=movie&id=${id}&ext=${ext}`
+                    ]}
+                    ext={ext}
+                    isLive={false}
+                    title={cleanName(title)}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* COLONNE DES INFORMATIONS (Synopsis & Casting) */}
+        <motion.div
+          layout="position"
+          transition={smoothTransition}
+          className={cn(
+            "flex-1 w-full space-y-4 sm:space-y-6 transition-all duration-500",
+            isPlaying ? "lg:w-[40%]" : "lg:w-full"
+          )}
+        >
+          {/* CARTE SYNOPSIS */}
+          <div className="bg-[#181a24] border border-white/5 rounded-2xl p-4 sm:p-6 shadow-lg">
+            <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-3">
+              <BookOpen className="w-4 h-4 text-iris-400" /> Synopsis & Histoire
+            </h3>
+            <p className="text-xs sm:text-sm leading-relaxed text-fog-300 font-light">
+              {info?.plot || info?.description || "Aucun synopsis disponible pour ce film."}
+            </p>
+            {info?.director && (
+              <p className="mt-4 text-xs text-fog-400">
+                Réalisateur : <span className="font-medium text-white">{info.director}</span>
+              </p>
+            )}
+          </div>
+
+          {/* CARTE CASTING */}
           {castList.length > 0 && (
-            <div className="pt-2 border-t border-white/10 space-y-2">
-              <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <User className="w-3.5 h-3.5 text-iris-400" /> Casting / Acteurs
+            <div className="bg-[#181a24] border border-white/5 rounded-2xl p-4 sm:p-6 shadow-lg">
+              <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
+                <User className="w-4 h-4 text-iris-400" /> Casting / Acteurs
               </h3>
               <div 
                 ref={actorScrollRef}
@@ -236,58 +350,14 @@ export default function MovieDetailPage() {
                 onClickCapture={(e) => { if (isDraggingX) e.stopPropagation(); }}
                 className="flex gap-2 overflow-x-auto pb-2 scrollbar-none cursor-grab active:cursor-grabbing"
               >
-                {castList.slice(0, 8).map((actor: string, idx: number) => (
+                {castList.map((actor: string, idx: number) => (
                   <FlipActorCard key={idx} name={actor} />
                 ))}
               </div>
             </div>
           )}
-        </div>
-      </DetailHero>
+        </motion.div>
 
-      {/* LECTEUR VIDÉO FILM */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-6xl mx-auto space-y-3 pt-4"
-      >
-        <div className="flex items-center justify-between px-2">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
-            <Play className="w-4 h-4 text-iris-400" /> Film Complet
-          </h2>
-          <div className="flex items-center gap-3">
-            <span className="uppercase text-[10px] font-bold bg-white/10 px-2 py-1 rounded text-fog-300">
-              {ext}
-            </span>
-            <button
-              onClick={handleFullscreenLandscape}
-              className="text-fog-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1.5 text-xs font-medium"
-            >
-              <Maximize className="w-4 h-4" /> <span className="hidden sm:inline">Plein Écran</span>
-            </button>
-          </div>
-        </div>
-
-        <div
-          ref={playerContainerRef}
-          onClick={handleDoubleTap}
-          className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl cursor-pointer group"
-        >
-          <div className="absolute inset-0 flex items-center justify-center [&>div]:w-full [&>div]:h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain">
-            <VideoPlayer
-              key={id}
-              sources={[
-                ext === "mp4"
-                  ? `/api/stream-vod?type=movie&id=${id}&ext=mp4`
-                  : `/api/transcode?type=movie&id=${id}&ext=${ext}`
-              ]}
-              ext={ext}
-              isLive={false}
-              title={cleanName(title)}
-            />
-          </div>
-        </div>
       </motion.div>
     </div>
   );
@@ -297,15 +367,16 @@ function MovieSkeleton() {
   return (
     <div className="px-5 pt-40 sm:px-8">
       <div className="flex gap-6">
-        <Skeleton className="hidden aspect-[2/3] w-44 sm:block" />
+        <Skeleton className="hidden aspect-[2/3] w-44 sm:block rounded-xl" />
         <div className="flex-1 space-y-4">
-          <Skeleton className="h-9 w-2/3" />
-          <Skeleton className="h-4 w-1/3" />
-          <Skeleton className="h-24 w-full max-w-2xl" />
+          <Skeleton className="h-10 w-2/3" />
+          <Skeleton className="h-6 w-1/3" />
+          <Skeleton className="h-12 w-40 mt-4" /> {/* Fake buttons */}
         </div>
       </div>
-      <div className="mt-12 w-full max-w-6xl mx-auto">
-         <Skeleton className="aspect-video w-full rounded-2xl" />
+      <div className="mt-12 space-y-6">
+         <Skeleton className="h-32 w-full rounded-2xl" />
+         <Skeleton className="h-48 w-full rounded-2xl" />
       </div>
     </div>
   );
