@@ -1,1 +1,1 @@
-[phases.setup]`nnixPkgs = [`"...`", `"ffmpeg`"]
+[phases.setup]`nnixPkgs = ["...", "ffmpeg"]
