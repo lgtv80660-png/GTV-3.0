@@ -15,7 +15,7 @@ export default function SeriesDetailPage() {
   const [activeTab, setActiveTab] = useState<"none" | "trailer" | "episode">("none");
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
 
-  const { data: seriesData, isLoading } = useSeriesInfo(seriesId);
+  const { data: seriesData, isLoading, isError } = useSeriesInfo(seriesId);
 
   const info = seriesData?.info;
   const seasonsEpisodes = seriesData?.episodes || {};
@@ -64,7 +64,7 @@ export default function SeriesDetailPage() {
 
       <div className="max-w-7xl mx-auto px-6 space-y-8 pb-12">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">{info?.name || "Titre de la série"}</h1>
+          <h1 className="text-4xl font-bold tracking-tight">{info?.name || "Série"}</h1>
           <div className="flex items-center gap-4 mt-3 text-sm text-gray-400">
             {info?.rating && (
               <span className="flex items-center gap-1 text-yellow-400 font-medium">
@@ -107,10 +107,11 @@ export default function SeriesDetailPage() {
                   )}&series=${seriesId}`
                 )
               }
-              className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-4 py-3 rounded-xl transition"
-              title="Plein écran"
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-5 py-3 rounded-xl transition font-medium border border-white/10"
+              title="Ouvrir sur /watch"
             >
               <Maximize2 className="h-4 w-4" />
+              <span>Ouvrir sur /watch</span>
             </button>
           )}
         </div>
@@ -205,33 +206,6 @@ export default function SeriesDetailPage() {
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6 border-t border-white/10">
-          <div className="md:col-span-2 space-y-3">
-            <h2 className="text-lg font-semibold text-gray-200">SYNOPSIS</h2>
-            <p className="text-gray-400 leading-relaxed text-sm">
-              {info?.plot || "Aucun synopsis disponible."}
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-gray-200">CASTING</h2>
-            <div className="flex flex-wrap gap-2">
-              {info?.cast ? (
-                info.cast.split(",").map((actor: string, i: number) => (
-                  <span
-                    key={i}
-                    className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-xs text-gray-300"
-                  >
-                    {actor.trim()}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-gray-500">Non disponible</span>
-              )}
-            </div>
           </div>
         </div>
       </div>
