@@ -1,13 +1,13 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Navigation } from "@/components/Navigation";
+import Providers from "@/components/providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "G-TV 3.0",
-  description: "IPTV Streaming Platform",
+  title: "GTV",
+  description: "IPTV Player",
 };
 
 export default function RootLayout({
@@ -16,12 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className="dark">
-      <body className={`${inter.className} bg-[#080b10] text-white antialiased overflow-hidden h-screen w-screen flex`}>
-        <Navigation />
-        <main className="flex-1 h-full min-w-0 relative overflow-hidden">
+    <html lang="fr">
+      <body className={inter.className}>
+        <Providers>
           {children}
-        </main>
+        </Providers>
       </body>
     </html>
   );

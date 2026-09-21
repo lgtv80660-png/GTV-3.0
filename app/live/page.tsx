@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from "react";
 import { CatalogBrowser } from "@/components/catalog/CatalogBrowser";
 import { useLiveStreams } from "@/lib/hooks";
 import { useUI } from "@/store/ui";
-import type { LiveStream } from "@/lib/xtream/types";
 import { useRouter } from "next/navigation";
 import { Tv, Loader2 } from "lucide-react";
 
@@ -15,7 +14,7 @@ function LiveCatalog() {
   const [visibleCount, setVisibleCount] = useState(60);
 
   const filteredLive = useMemo(() => {
-    let arr = (liveStreams as LiveStream[]) || [];
+    let arr = liveStreams || [];
     const search = filters?.search?.toLowerCase() || "";
     if (search) {
       arr = arr.filter(s => (s.name || "").toLowerCase().includes(search));
