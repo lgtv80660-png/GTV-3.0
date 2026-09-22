@@ -6,13 +6,85 @@ import { Heart, Film, Tv, Play, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLibrary } from "@/store/library";
 
+/* =========================================================
+   HELPER : GESTION INTELLIGENTE DES IMAGES
+========================================================= */
+function getImageUrl(item: any): string | null {
+  const img = item.poster || item.cover || item.movie_image || item.stream_icon;
+  if (!img) return null;
+  if (img.startsWith("/")) return `https://image.tmdb.org/t/p/w500${img}`;
+  return img;
+}
+
+/* =========================================================
+   COMPOSANT CARTE FAVORIS (Gère ses propres erreurs d'image)
+========================================================= */
+function FavoriteCard({ item, activeTab, toggleFav }: { item: any; activeTab: string; toggleFav: any }) {
+  const [imgError, setImgError] = useState(false);
+  const imgSrc = getImageUrl(item);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.2 }}
+      className="group relative rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 shadow-lg flex flex-col"
+    >
+      <Link href={`/${activeTab}/${item.id}`} className="block relative aspect-[2/3] overflow-hidden bg-[#0d0d12]">
+        {imgSrc && !imgError ? (
+          <img
+            src={imgSrc}
+            alt={item.name || item.title}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            loading="lazy"
+            onError={() => setImgError(true)} // Si l'image est morte, on passe imgError à true proprement
+          />
+        ) : (
+          // Affichage de secours (Fallback) si pas d'image ou lien mort
+          <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800/50">
+            {activeTab === "movies" ? (
+              <Film className="w-10 h-10 text-zinc-600 mb-2" />
+            ) : (
+              <Tv className="w-10 h-10 text-zinc-600 mb-2" />
+            )}
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          <div className="bg-[#aa95ff] rounded-full p-3 transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-[0_0_20px_rgba(170,149,255,0.5)]">
+            <Play className="w-6 h-6 fill-white text-white translate-x-0.5" />
+          </div>
+        </div>
+      </Link>
+
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          toggleFav(activeTab, item);
+        }}
+        className="absolute top-2 right-2 p-2 bg-black/70 hover:bg-red-500/90 backdrop-blur-md rounded-full text-white/80 hover:text-white transition-colors z-10 opacity-0 group-hover:opacity-100"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+
+      <div className="p-3 bg-[#12141c]">
+        <h3 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-[#d8ccff] transition-colors">
+          {item.name || item.title}
+        </h3>
+      </div>
+    </motion.div>
+  );
+}
+
+/* =========================================================
+   PAGE PRINCIPALE
+========================================================= */
 export default function FavoritesPage() {
   const [activeTab, setActiveTab] = useState<"movies" | "series">("movies");
   
-  // On récupère le dictionnaire complet depuis ton store
   const { favorites, toggleFav } = useLibrary();
 
-  // 🔴 CONVERSION MAGIQUE : On extrait les films et séries de ton Record<string, LibraryItem>
   const movies = Object.entries(favorites)
     .filter(([key]) => key.startsWith("movies:"))
     .map(([_, item]) => item);
@@ -89,51 +161,12 @@ export default function FavoritesPage() {
             <motion.div layout className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
               <AnimatePresence>
                 {currentList.map((item: any) => (
-                  <motion.div
-                    layout
-                    key={item.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2 }}
-                    className="group relative rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 shadow-lg flex flex-col"
-                  >
-                    <Link href={`/${activeTab}/${item.id}`} className="block relative aspect-[2/3] overflow-hidden">
-                      {item.poster || item.cover ? (
-                        <img 
-                          src={item.poster || item.cover} 
-                          alt={item.name || item.title} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                          {activeTab === "movies" ? <Film className="w-10 h-10 text-zinc-600" /> : <Tv className="w-10 h-10 text-zinc-600" />}
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <div className="bg-iris-600 rounded-full p-3 transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-[0_0_20px_rgba(99,102,241,0.5)]">
-                          <Play className="w-6 h-6 fill-white text-white translate-x-0.5" />
-                        </div>
-                      </div>
-                    </Link>
-
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleFav(activeTab, item);
-                      }}
-                      className="absolute top-2 right-2 p-2 bg-black/70 hover:bg-red-500/90 backdrop-blur-md rounded-full text-white/80 hover:text-white transition-colors z-10 opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-
-                    <div className="p-3 bg-[#12141c]">
-                      <h3 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-iris-400 transition-colors">
-                        {item.name || item.title}
-                      </h3>
-                    </div>
-                  </motion.div>
+                  <FavoriteCard 
+                    key={item.id} 
+                    item={item} 
+                    activeTab={activeTab} 
+                    toggleFav={toggleFav} 
+                  />
                 ))}
               </AnimatePresence>
             </motion.div>

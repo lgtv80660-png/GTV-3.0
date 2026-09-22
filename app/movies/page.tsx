@@ -3,20 +3,22 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Film } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-
-// === FONCTION DE NETTOYAGE DES NOMS (Avec Filtre Caractères Spéciaux) ===
+import { Film, Play, Clapperboard } from "lucide-react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+import { cn } from "@/lib/utils";
+/* =========================================================
+   FONCTION DE NETTOYAGE DES NOMS
+========================================================= */
 const formatCategoryName = (rawName: string) => {
   if (!rawName) return "";
   
   let cleanName = rawName
     .replace(/\[.*?\]/g, "") 
     .replace(/\|.*?\|/g, "") 
-    .replace(/[ⓋⒹ║]/g, "") // Détruit les symboles IPTV bizarres
+    .replace(/[ⓋⒹ║]/g, "")
     .replace(/VOD-FR/gi, "")
     .replace(/FR -/gi, "")
-    .replace(/^[-_|\s]+|[-_|\s]+$/g, "") // Nettoie les tirets orphelins sur les bords
+    .replace(/^[-_|\s]+|[-_|\s]+$/g, "")
     .trim();
 
   const customNames: Record<string, string> = {
@@ -29,7 +31,9 @@ const formatCategoryName = (rawName: string) => {
   return customNames[cleanName] || cleanName;
 };
 
-// === COMPOSANT CARTE CATÉGORIE ===
+/* =========================================================
+   COMPOSANT CARTE CATÉGORIE (Design Premium)
+========================================================= */
 const CategoryCard = ({ 
   name, 
   isActive, 
@@ -37,7 +41,7 @@ const CategoryCard = ({
 }: { 
   name: string, 
   isActive: boolean, 
-  onClick: () => void 
+  onClick: (e: React.MouseEvent) => void 
 }) => {
   const [bgImage, setBgImage] = useState<string | null>(null);
 
@@ -55,32 +59,51 @@ const CategoryCard = ({
   return (
     <button
       onClick={onClick}
-      className={`relative flex-shrink-0 w-36 sm:w-44 h-16 sm:h-20 rounded-xl overflow-hidden transition-all duration-300 ${
+      className={cn(
+        "group relative flex-shrink-0 w-[140px] sm:w-[170px] h-[64px] sm:h-[76px] rounded-[16px] overflow-hidden transition-all duration-300 select-none",
         isActive
-          ? "ring-2 ring-white shadow-[0_0_20px_rgba(255,255,255,0.4)] scale-105 opacity-100"
-          : "hover:ring-1 hover:ring-white/50 opacity-60 hover:opacity-100 hover:scale-105"
-      }`}
+          ? "border-[#d8ccff]/50 bg-[#d8ccff]/10 shadow-[0_12px_35px_rgba(170,145,255,.16)] scale-[1.02]"
+          : "border border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.06]"
+      )}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950" />
-      
-      {bgImage && (
-        <img 
-          src={bgImage} 
-          alt={name} 
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none" 
-          onError={(e) => (e.currentTarget.style.display = 'none')} 
-        />
+      {/* Background Image with Overlay */}
+      {bgImage ? (
+        <>
+          <img 
+            src={bgImage} 
+            alt={name} 
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-cover opacity-40 transition-opacity duration-300 group-hover:opacity-60 pointer-events-none" 
+            onError={(e) => (e.currentTarget.style.display = 'none')} 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#060608]/90 via-[#060608]/60 to-transparent pointer-events-none" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent pointer-events-none" />
       )}
       
-      <div className="absolute inset-0 bg-black/60 transition-colors hover:bg-black/40" />
-      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm font-bold text-white tracking-wide text-center px-2 leading-tight drop-shadow-md">
+      {/* Active Glow Outline */}
+      {isActive && (
+        <motion.div
+          layoutId="active-category-outline"
+          className="absolute inset-0 rounded-[16px] ring-1 ring-[#d8ccff]/60 shadow-[inset_0_0_24px_rgba(216,204,255,.12)]"
+        />
+      )}
+
+      {/* Text */}
+      <span className={cn(
+        "absolute inset-0 flex items-center justify-center text-xs sm:text-[13px] font-bold tracking-wide text-center px-3 leading-tight drop-shadow-md transition-colors",
+        isActive ? "text-white" : "text-white/70 group-hover:text-white"
+      )}>
         {name}
       </span>
     </button>
   );
 };
 
-// === MOTEURS DE GLISSEMENT ===
+/* =========================================================
+   MOTEURS DE GLISSEMENT (Tactile & Souris)
+========================================================= */
 function useHorizontalScroll() {
   const ref = useRef<HTMLDivElement>(null);
   const isDrag = useRef(false);
@@ -99,7 +122,7 @@ function useHorizontalScroll() {
     if (!isDrag.current || !ref.current) return;
     e.preventDefault();
     const x = e.pageX - ref.current.offsetLeft;
-    const walk = (x - startX.current) * 2;
+    const walk = (x - startX.current) * 1.5;
     if (Math.abs(walk) > 5) setIsDragging(true);
     ref.current.scrollLeft = scrollLeft.current - walk;
   };
@@ -107,7 +130,7 @@ function useHorizontalScroll() {
     isDrag.current = false;
     setTimeout(() => setIsDragging(false), 50);
   };
-  return { ref, onMouseDown, onMouseMove, onMouseUp: onMouseUpOrLeave, onMouseLeave: onMouseUpOrLeave, isDragging, onClickCapture: (e: React.MouseEvent) => { if (isDragging) e.stopPropagation(); } };
+  return { ref, onMouseDown, onMouseMove, onMouseUp: onMouseUpOrLeave, onMouseLeave: onMouseUpOrLeave, isDragging };
 }
 
 function useVerticalScroll() {
@@ -128,7 +151,7 @@ function useVerticalScroll() {
     if (!isDrag.current || !ref.current) return;
     e.preventDefault();
     const y = e.pageY - ref.current.offsetTop;
-    const walk = (y - startY.current) * 2;
+    const walk = (y - startY.current) * 1.5;
     if (Math.abs(walk) > 5) setIsDragging(true);
     ref.current.scrollTop = scrollTop.current - walk;
   };
@@ -136,9 +159,12 @@ function useVerticalScroll() {
     isDrag.current = false;
     setTimeout(() => setIsDragging(false), 50);
   };
-  return { ref, onMouseDown, onMouseMove, onMouseUp: onMouseUpOrLeave, onMouseLeave: onMouseUpOrLeave, isDragging, onClickCapture: (e: React.MouseEvent) => { if (isDragging) e.stopPropagation(); } };
+  return { ref, onMouseDown, onMouseMove, onMouseUp: onMouseUpOrLeave, onMouseLeave: onMouseUpOrLeave, isDragging };
 }
 
+/* =========================================================
+   PAGE PRINCIPALE
+========================================================= */
 export default function MoviesCatalogPage() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string>("0");
@@ -171,37 +197,60 @@ export default function MoviesCatalogPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } };
-  const itemVariants = { hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } } };
+const containerVariants: Variants = { 
+    hidden: { opacity: 0 }, 
+    show: { opacity: 1, transition: { staggerChildren: 0.04 } } 
+  };
+  
+  const itemVariants: Variants = { 
+    hidden: { opacity: 0, scale: 0.95, y: 20 }, 
+    show: { 
+      opacity: 1, 
+      scale: 1, 
+      y: 0, 
+      transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] } 
+    } 
+  };
 
   return (
-    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-[#060608] text-white overflow-hidden relative">
       
+      {/* BACKGROUND EFFECTS */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 inset-x-0 h-[40vh] bg-gradient-to-b from-[#d8ccff]/[0.025] to-transparent blur-3xl" />
+      </div>
+
       {/* HEADER & CATÉGORIES */}
-      <div className="shrink-0 p-4 sm:p-8 pb-0">
+      <div className="relative z-10 shrink-0 px-4 sm:px-8 pt-8 pb-2">
         <div className="flex items-center justify-between mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight flex items-center gap-3">
-            <Film className="w-8 h-8 text-white" />
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight flex items-center gap-3 drop-shadow-md">
+            <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/10 border border-white/5 backdrop-blur-md">
+              <Clapperboard className="w-5 h-5 sm:w-6 sm:h-6 text-[#d8ccff]" />
+            </div>
             Films
           </h1>
         </div>
 
-        <div className="relative mb-4">
+        <div className="relative mb-2">
            {isLoadingCats ? (
               <div className="flex gap-3 overflow-hidden">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="h-16 w-36 sm:w-40 bg-zinc-900 rounded-xl animate-pulse border border-white/5 shrink-0" />
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="h-[64px] w-[140px] sm:h-[76px] sm:w-[170px] bg-white/[0.03] rounded-[16px] animate-pulse border border-white/5 shrink-0" />
                 ))}
               </div>
            ) : (
               <div 
                 {...categoryDrag}
+                style={{ WebkitOverflowScrolling: "touch" }}
                 className="flex overflow-x-auto gap-3 pb-4 scrollbar-none cursor-grab active:cursor-grabbing select-none"
               >
                 <CategoryCard 
                   name="Tous les films" 
                   isActive={activeCategory === "0"} 
-                  onClick={() => setActiveCategory("0")} 
+                  onClick={(e) => {
+                    if (categoryDrag.isDragging) { e.stopPropagation(); return; }
+                    setActiveCategory("0");
+                  }} 
                 />
                 
                 {categories?.map((cat: any) => (
@@ -209,7 +258,10 @@ export default function MoviesCatalogPage() {
                     key={cat.category_id}
                     name={cat.category_name} 
                     isActive={activeCategory === cat.category_id} 
-                    onClick={() => setActiveCategory(cat.category_id)} 
+                    onClick={(e) => {
+                      if (categoryDrag.isDragging) { e.stopPropagation(); return; }
+                      setActiveCategory(cat.category_id);
+                    }} 
                   />
                 ))}
               </div>
@@ -217,15 +269,19 @@ export default function MoviesCatalogPage() {
         </div>
       </div>
 
+      {/* LIGNE DE SÉPARATION SUBTILE */}
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent shrink-0 opacity-50" />
+
       {/* GRILLE DES FILMS VERTICALE */}
       <div 
         {...movieDrag}
-        className="flex-1 overflow-y-auto p-4 sm:p-8 pt-2 pb-32 scrollbar-none cursor-grab active:cursor-grabbing select-none"
+        style={{ WebkitOverflowScrolling: "touch" }}
+        className="relative z-10 flex-1 overflow-y-auto p-4 sm:p-8 pt-6 pb-32 scrollbar-none cursor-grab active:cursor-grabbing select-none"
       >
         {isLoadingMovies ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
-            {[...Array(18)].map((_, i) => (
-              <div key={i} className="aspect-[2/3] bg-zinc-900 rounded-2xl animate-pulse border border-white/5" />
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 sm:gap-5">
+            {[...Array(24)].map((_, i) => (
+              <div key={i} className="aspect-[2/3] bg-white/[0.03] rounded-[20px] animate-pulse border border-white/5" />
             ))}
           </div>
         ) : (
@@ -236,33 +292,51 @@ export default function MoviesCatalogPage() {
               initial="hidden"
               animate="show"
               exit="hidden"
-              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6"
+              className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 sm:gap-5"
             >
               {movies?.slice(0, 150).map((movie: any) => (
                 <motion.div
                   variants={itemVariants}
                   key={movie.stream_id}
-                  onClick={() => router.push(`/movies/${movie.stream_id}`)}
-                  className="group cursor-pointer relative"
+                  onClick={(e) => {
+                    if (movieDrag.isDragging) {
+                      e.stopPropagation();
+                      return;
+                    }
+                    router.push(`/movies/${movie.stream_id}`);
+                  }}
+                  className="group cursor-pointer relative flex flex-col"
                 >
-                  <div className="aspect-[2/3] rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 relative shadow-lg">
+                  <div className="relative aspect-[2/3] rounded-[20px] overflow-hidden bg-[#0d0d12] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover:border-white/20 group-hover:shadow-[0_15px_40px_rgba(0,0,0,0.6)]">
+                    
                     {movie.stream_icon ? (
                       <img
                         src={movie.stream_icon}
                         alt={movie.name}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 pointer-events-none"
+                        draggable={false}
+                        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 pointer-events-none"
                         loading="lazy"
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                        onError={(e) => (e.currentTarget.style.opacity = '0')}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center pointer-events-none">
-                        <Film className="w-10 h-10 text-zinc-700" />
+                        <Film className="w-10 h-10 text-white/10" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 pointer-events-none" />
+                    
+                    {/* OVERLAY SOMBRE & ICONE PLAY AU SURVOL */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-white/20 border border-white/30 backdrop-blur-md flex items-center justify-center scale-75 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 ease-out shadow-2xl">
+                         <Play className="w-5 h-5 text-white translate-x-0.5 fill-white" />
+                      </div>
+                    </div>
+
+                    {/* DÉGRADÉ INFÉRIEUR POUR LISIBILITÉ (si on voulait mettre du texte dessus) */}
+                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   </div>
                   
-                  <h3 className="mt-3 text-xs sm:text-sm font-bold text-zinc-300 truncate group-hover:text-white transition-colors">
+                  {/* TITRE SOUS L'AFFICHE */}
+                  <h3 className="mt-3 text-[11px] sm:text-[13px] font-semibold text-white/70 truncate group-hover:text-white transition-colors px-1">
                     {movie.name}
                   </h3>
                 </motion.div>
