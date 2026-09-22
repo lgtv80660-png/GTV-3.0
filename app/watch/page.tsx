@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { resolveSrc } from "@/lib/api";
 import { useSeriesInfo } from "@/lib/hooks";
 import type { StreamKind, Episode } from "@/lib/xtream/types";
+import { saveLastPlayed } from "@/lib/continueWatching";
 
 function WatchPlayer() {
   const searchParams = useSearchParams();

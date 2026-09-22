@@ -18,16 +18,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className="dark">
-      {/* Correction appliquée sur la ligne suivante : ajout des backticks */}
-<body className={`${inter.className} bg-background text-white antialiased overflow-hidden select-none`}>        <Providers>
+      <body className={`${inter.className} bg-background text-white antialiased overflow-hidden select-none`}>
+        <Providers>
           <div className="flex h-screen w-full relative">
-            
-            <Navigation/>
-            
+            {/* On appelle juste la navigation ici */}
+            <Navigation />
             <main className="flex-1 relative overflow-y-auto pb-16 md:pb-0 md:ml-16 bg-surface/30">
               {children}
             </main>
-            
           </div>
         </Providers>
       </body>

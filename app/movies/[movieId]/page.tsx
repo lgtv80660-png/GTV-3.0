@@ -1,441 +1,624 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
-import { Star, Calendar, Clock, User, Info, Maximize, Play, Film, X, BookOpen } from "lucide-react";
-import { motion, AnimatePresence, Transition } from "framer-motion";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Heart, Maximize, Play, Plus, Star, User, X, Film, Trophy, Clapperboard } from "lucide-react";
+import { AnimatePresence, motion, type Transition } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { DetailHero } from "@/components/catalog/DetailHero";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { useLibrary } from "@/store/library";
-import { ratingNum, yearFrom, cleanName, cn } from "@/lib/utils";
+import { cn, ratingNum, yearFrom } from "@/lib/utils";
+
+/* =========================================================
+   CONFIG & UTILS
+========================================================= */
 
 const smoothTransition: Transition = {
   duration: 0.6,
-  ease: [0.16, 1, 0.3, 1] as const,
+  ease: [0.16, 1, 0.3, 1],
 };
 
-// --- COMPOSANT LOGO TRANSPARENT ---
-const ClearLogo = ({ title, tmdbId, type = "movie" }: { title: string, tmdbId?: string | number, type?: "movie" | "tv" }) => {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let url = `/api/title-logo?title=${encodeURIComponent(title)}&type=${type}`;
-    if (tmdbId) url += `&tmdbId=${tmdbId}`;
-
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        if (data.logoUrl) setLogoUrl(data.logoUrl);
-      })
-      .catch(() => {});
-  }, [title, tmdbId, type]);
-
-  if (logoUrl) {
-    return (
-      <motion.img 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        src={logoUrl} 
-        alt={title} 
-        className="max-w-[280px] sm:max-w-[420px] max-h-[160px] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.9)] mb-2" 
-      />
-    );
-  }
-  
-  return (
-    <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
-      {cleanName(title)}
-    </h1>
-  );
+const blurTransition: Transition = {
+  duration: 0.5,
+  ease: [0.16, 1, 0.3, 1],
 };
-// ----------------------------------
 
-const FlipActorCard = ({ name }: { name: string }) => {
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [bio, setBio] = useState<string>("Chargement...");
-  const [isFlipped, setIsFlipped] = useState(false);
+const cleanMovieTitle = (rawTitle: string) => {
+  if (!rawTitle) return "";
+  return rawTitle
+    .replace(/\[.*?\]/g, "")
+    .replace(/\|.*?\|/g, "")
+    .replace(/[ⓋⒹ║]/g, "")
+    .replace(/\b(4K|202[0-9]|1080p|720p|FHD|UHD|HDR|HEVC|MULTi|TRUEFRENCH|FRENCH|VOSTFR)\b/gi, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/[\/\\|_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+function formatDuration(minutes: number) {
+  if (!minutes || minutes <= 0) return "";
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.floor(minutes % 60);
+  if (hours > 0) return `${hours} h ${mins} min`;
+  return `${mins} min`;
+}
+
+/* =========================================================
+   FANART HOOK
+========================================================= */
+
+type FanartData = {
+  logo?: string | null;
+  backdrop?: string | null;
+  poster?: string | null;
+};
+
+function useFanartMovie(title: string, tmdbId?: string | number) {
+  const [data, setData] = useState<FanartData>({});
 
   useEffect(() => {
-    let isMounted = true;
+    if (!title) return;
+    let mounted = true;
+    const cleanedTitle = cleanMovieTitle(title);
+    
+    const fetchImages = async () => {
+      try {
+        let logoUrl = `/api/title-logo?title=${encodeURIComponent(cleanedTitle)}&type=movie`;
+        if (tmdbId) logoUrl += `&tmdbId=${tmdbId}`;
+        const logoRes = await fetch(logoUrl).catch(() => null);
+        const logoData = logoRes ? await logoRes.json().catch(() => ({})) : {};
+
+        let fanartData: any = {};
+        if (tmdbId) {
+          const fanartRes = await fetch(`/api/fanart/movie?tmdbId=${tmdbId}`).catch(() => null);
+          fanartData = fanartRes ? await fanartRes.json().catch(() => ({})) : {};
+        }
+
+        if (mounted) {
+          setData({
+            logo: logoData?.logoUrl || fanartData?.logo || null,
+            poster: fanartData?.poster || null,
+            backdrop: fanartData?.backdrop || null,
+          });
+        }
+      } catch (e) {
+        console.error("Erreur images", e);
+      }
+    };
+
+    fetchImages();
+    return () => { mounted = false; };
+  }, [title, tmdbId]);
+
+  return data;
+}
+
+/* =========================================================
+   DIRECTOR SHOWCASE (Robuste)
+========================================================= */
+
+type DirectorData = {
+  photoUrl: string | null;
+  bio: string;
+  awards?: string | null;
+  knownFor?: { title: string; poster: string }[];
+};
+
+function DirectorShowcase({ name, backdrop }: { name?: string; backdrop?: string | null }) {
+  const [data, setData] = useState<DirectorData | null>(null);
+
+  useEffect(() => {
+    if (!name) return;
+    let mounted = true;
     fetch(`/api/actor-photo?name=${encodeURIComponent(name)}`)
       .then((res) => res.json())
-      .then((data) => {
-        if (isMounted) {
-          if (data?.photoUrl) setPhotoUrl(data.photoUrl);
-          if (data?.bio) setBio(data.bio);
-        }
+      .then((json) => {
+        if (!mounted) return;
+        
+        // Sécurisation de l'API pour les films connus
+        let parsedKnownFor: any[] = [];
+        if (Array.isArray(json?.knownFor)) parsedKnownFor = json.knownFor;
+        else if (Array.isArray(json?.movies)) parsedKnownFor = json.movies;
+
+        setData({ 
+          photoUrl: json?.photoUrl || null, 
+          bio: json?.bio || "",
+          awards: json?.awards || null,
+          knownFor: parsedKnownFor
+        });
       })
-      .catch(() => {
-        if (isMounted) setBio("Information non disponible.");
-      });
-    return () => {
-      isMounted = false;
-    };
+      .catch(() => {});
+    return () => { mounted = false; };
   }, [name]);
 
   return (
-    <div
-      tabIndex={0}
-      onClick={() => setIsFlipped(!isFlipped)}
-      className="group perspective w-20 sm:w-28 h-32 sm:h-40 flex-shrink-0 cursor-pointer select-none focus:outline-none"
-    >
-      <div
-        className={cn(
-          "relative w-full h-full rounded-xl transition-transform duration-500 transform-style-3d",
-          isFlipped ? "rotate-y-180" : "group-hover:scale-105"
-        )}
-      >
-        <div className="absolute inset-0 w-full h-full rounded-xl overflow-hidden bg-[#181a24] border border-white/10 shadow-lg backface-hidden flex flex-col justify-end">
-          {photoUrl ? (
-            <img src={photoUrl} alt={name} className="absolute inset-0 w-full h-full object-cover" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-indigo-950/40 text-indigo-400">
-              <User className="w-5 h-5" />
+    <div className="absolute inset-0 flex flex-col justify-center overflow-hidden bg-[#07070a] group-hover:bg-[#040406] transition-colors duration-500">
+      {backdrop && (
+        <img src={backdrop} className="absolute inset-0 w-full h-full object-cover opacity-15 blur-[25px] scale-125 saturate-50" alt="" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#07070a] via-[#07070a]/80 to-transparent" />
+      
+      {name ? (
+        <div className="relative z-10 flex flex-col justify-center h-full p-6 lg:p-8 w-full max-w-full">
+          
+          <div className="flex items-center gap-6">
+            {/* Photo Carrée */}
+            <div className="w-[90px] h-[90px] sm:w-[110px] sm:h-[110px] shrink-0 rounded-[22px] overflow-hidden border border-white/10 shadow-2xl bg-white/5">
+              {data?.photoUrl ? (
+                <img src={data.photoUrl} alt={name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center"><User className="w-8 h-8 text-white/20" /></div>
+              )}
+            </div>
+            
+            <div className="flex flex-col min-w-0 flex-1">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[#d8ccff]/70 mb-1 font-medium">
+                Réalisateur & Producteur
+              </p>
+              <h3 className="text-2xl sm:text-3xl font-bold text-white truncate drop-shadow-md tracking-tight">{name}</h3>
+              
+              {data?.awards && (
+                <div className="mt-2.5 flex items-start gap-2 text-white/65 bg-white/5 w-fit px-3 py-1.5 rounded-lg border border-white/5">
+                  <Trophy className="w-4 h-4 text-yellow-500/90 shrink-0" />
+                  <p className="text-[11px] sm:text-xs leading-snug line-clamp-1 font-medium">
+                    {data.awards}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <p className="text-[13px] sm:text-sm text-white/60 line-clamp-3 leading-relaxed">
+              {data?.bio || "Biographie indisponible. Lancez le film ou la bande-annonce pour découvrir son œuvre."}
+            </p>
+          </div>
+
+          {/* S'affiche UNIQUEMENT si le réalisateur a d'autres films valides */}
+          {Array.isArray(data?.knownFor) && data.knownFor.length > 0 && (
+            <div className="mt-7 pt-5 border-t border-white/10">
+              <div className="flex items-center gap-2 mb-3">
+                <Clapperboard className="w-4 h-4 text-[#d8ccff]/80" />
+                <h4 className="text-[11px] uppercase tracking-wider text-white/80 font-medium">Autres œuvres</h4>
+              </div>
+              <div className="flex gap-3">
+                {data.knownFor.slice(0, 5).map((work, idx) => (
+                  <div key={idx} className="w-[50px] h-[75px] sm:w-[60px] sm:h-[85px] rounded-[10px] overflow-hidden border border-white/10 bg-white/5 shrink-0 opacity-70 hover:opacity-100 transition-opacity">
+                    <img src={work?.poster || undefined} alt={work?.title || "Film"} className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display = 'none'} />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-          <div className="relative z-10 p-1.5 flex items-center justify-between">
-            <span className="text-[9px] sm:text-[10px] font-bold text-white line-clamp-1">{name}</span>
-            <Info className="w-2.5 h-2.5 text-indigo-400 opacity-70 flex-shrink-0" />
-          </div>
+          
         </div>
-
-        <div className="absolute inset-0 w-full h-full rounded-xl p-2 bg-gradient-to-br from-indigo-950 to-[#12141c] border border-indigo-500/40 text-white backface-hidden rotate-y-180 flex flex-col justify-between shadow-xl">
-          <div className="space-y-0.5 overflow-hidden">
-            <p className="text-[9px] font-bold text-indigo-300 line-clamp-1">{name}</p>
-            <p className="text-[8px] text-zinc-300 leading-tight line-clamp-4">{bio}</p>
-          </div>
-          <span className="text-[7px] text-zinc-500 italic self-end">Retourner</span>
+      ) : (
+        <div className="relative z-10 flex flex-col items-center justify-center h-full opacity-40">
+           <Film className="w-12 h-12 mb-4 text-white/30" />
+           <p className="text-sm font-medium">Cliquez sur Regarder ou Bande-annonce</p>
         </div>
-      </div>
+      )}
     </div>
   );
-};
+}
+
+/* =========================================================
+   ACTOR MINI & CASTING
+========================================================= */
+
+type ActorMiniData = { name: string; photoUrl: string | null; bio: string; };
+
+function ActorMini({ name, active, compact, onSelect }: { name: string; active: boolean; compact: boolean; onSelect: (actor: ActorMiniData) => void; }) {
+  const [data, setData] = useState<ActorMiniData>({ name, photoUrl: null, bio: "" });
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`/api/actor-photo?name=${encodeURIComponent(name)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!mounted) return;
+        setData({ name, photoUrl: json?.photoUrl || null, bio: json?.bio || "" });
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [name]);
+
+  return (
+    <motion.button
+      layout type="button" draggable={false} onClick={() => onSelect(data)} transition={smoothTransition}
+      className={cn(
+        "group relative shrink-0 overflow-hidden rounded-[14px] border select-none backdrop-blur-xl transition-colors duration-300",
+        compact ? "w-[54px] sm:w-[60px] aspect-[3/4]" : "w-[64px] sm:w-[74px] aspect-[3/4]",
+        active ? "border-[#d8ccff]/50 bg-[#d8ccff]/10 shadow-[0_12px_35px_rgba(170,145,255,.16)]" : "border-white/10 bg-white/[0.035] hover:border-white/20"
+      )}
+    >
+      {data.photoUrl ? (
+        <img src={data.photoUrl || undefined} alt={name} draggable={false} className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover" />
+      ) : (
+        <div className="absolute inset-0 grid place-items-center"><User className="h-5 w-5 text-white/20" /></div>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.11] to-transparent" />
+      {active && <motion.div layoutId="active-actor-outline" className="absolute inset-0 rounded-[14px] ring-1 ring-[#d8ccff]/60 shadow-[inset_0_0_24px_rgba(216,204,255,.12)]" />}
+      <p className="pointer-events-none absolute bottom-1.5 left-1.5 right-1.5 truncate text-[8.5px] font-medium text-white/85 sm:text-[9.5px]">{name}</p>
+    </motion.button>
+  );
+}
+
+function CastingShowcase({ actors, movieLogo }: { actors: string[], movieLogo?: string | null }) {
+  const [selected, setSelected] = useState<ActorMiniData | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const mouseDown = useRef(false);
+  const dragged = useRef(false);
+  const startX = useRef(0);
+  const startScroll = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!railRef.current) return;
+    mouseDown.current = true;
+    dragged.current = false;
+    startX.current = e.clientX;
+    startScroll.current = railRef.current.scrollLeft;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!railRef.current || !mouseDown.current) return;
+    const delta = e.clientX - startX.current;
+    if (Math.abs(delta) > 5) dragged.current = true;
+    if (dragged.current) {
+      e.preventDefault();
+      railRef.current.scrollLeft = startScroll.current - delta * 1.15;
+    }
+  };
+
+  const stopMouseDrag = () => {
+    mouseDown.current = false;
+    setTimeout(() => { dragged.current = false; }, 70);
+  };
+
+  const selectActor = (actor: ActorMiniData) => {
+    if (dragged.current) return;
+    if (selected?.name === actor.name) { setSelected(null); return; }
+    setSelected(actor);
+  };
+
+  return (
+    <div className="border-t border-white/[0.07] pt-5">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#d8ccff] shadow-[0_0_14px_rgba(216,204,255,.8)]" />
+        <p className="text-[9px] uppercase tracking-[0.24em] text-white/45 font-semibold">Casting / Acteurs</p>
+      </div>
+
+      <motion.div layout transition={smoothTransition} className="relative overflow-hidden rounded-[20px] border border-white/[0.10] bg-white/[0.02] p-2.5 sm:p-3 backdrop-blur-xl">
+        <motion.div layout transition={smoothTransition} className="relative z-10 flex min-w-0 items-stretch gap-4">
+          <motion.div layout transition={smoothTransition} className={cn("flex min-w-0 items-center overflow-hidden", selected ? "w-[46%]" : "w-full")}>
+            <div className="relative min-w-0 w-full overflow-hidden">
+              <div
+                ref={railRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={stopMouseDrag} onMouseLeave={stopMouseDrag}
+                style={{ WebkitOverflowScrolling: "touch" }}
+                className="flex min-w-0 w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-none select-none cursor-grab active:cursor-grabbing items-center"
+              >
+                {movieLogo && (
+                  <div className="shrink-0 flex items-center justify-center w-[70px] sm:w-[90px] mr-1 pr-3 border-r border-white/10 h-[64px] sm:h-[74px]">
+                    <img src={movieLogo || undefined} alt="Logo du film" className="max-h-[45px] max-w-full object-contain drop-shadow-md pointer-events-none opacity-90" />
+                  </div>
+                )}
+                
+                {actors.map((actor) => (
+                  <ActorMini key={actor} name={actor} compact={!!selected} active={selected?.name === actor} onSelect={selectActor} />
+                ))}
+              </div>
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#060608] to-transparent" />
+            </div>
+          </motion.div>
+
+          <AnimatePresence mode="popLayout">
+            {selected && (
+              <motion.div
+                layout key={selected.name} initial={{ opacity: 0, x: 65, scale: 0.95 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: 45, scale: 0.97 }} transition={smoothTransition}
+                className="relative w-[54%] min-h-[140px] overflow-hidden rounded-[16px] border border-white/[0.11] bg-[#0d0d12]/90"
+              >
+                {selected.photoUrl && (
+                  <motion.img
+                    key={selected.photoUrl} initial={{ opacity: 0, x: 50, scale: 1.1 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+                    src={selected.photoUrl || undefined} alt={selected.name} className="absolute right-0 top-0 h-full w-[52%] object-cover"
+                  />
+                )}
+                <div className="pointer-events-none absolute right-0 top-0 h-full w-[52%] bg-gradient-to-br from-white/[0.10] via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#101015] via-[#101015]/98 via-[52%] to-transparent" />
+                
+                <motion.div key={`${selected.name}-text`} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.07, ...smoothTransition }} className="relative z-10 max-w-[62%] p-4 sm:p-5">
+                  <p className="text-[8px] uppercase tracking-[0.25em] text-[#d8ccff]/75">Distribution</p>
+                  <h3 className="mt-0.5 text-base font-semibold tracking-tight sm:text-lg">{selected.name}</h3>
+                  <p className="mt-2 line-clamp-3 text-[10px] leading-relaxed text-white/50 sm:text-[11px]">{selected.bio}</p>
+                </motion.div>
+
+                <button type="button" onClick={() => setSelected(null)} className="absolute right-2 top-2 z-20 grid h-7 w-7 place-items-center rounded-full border border-white/10 bg-black/30 text-white/45 backdrop-blur-xl transition hover:bg-white/10 hover:text-white">
+                  <X className="h-3 w-3" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* =========================================================
+   PAGE PRINCIPALE
+========================================================= */
 
 export default function MovieDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = (params?.movieId || params?.id) as string;
 
   const [playerMode, setPlayerMode] = useState<"none" | "movie" | "trailer">("none");
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const lastTapRef = useRef(0);
 
-  // Chargement ultra-rapide avec Promise.any
   const { data, isLoading, isError } = useQuery({
     queryKey: ["movie-info", id],
     queryFn: async () => {
-      const fetch1 = fetch(`/api/movie-info?id=${id}&vod_id=${id}`).then((res) => {
-        if (!res.ok) throw new Error();
-        return res.json();
-      });
-      const fetch2 = fetch(`/api/xtream?action=get_vod_info&vod_id=${id}`).then((res) => {
-        if (!res.ok) throw new Error();
-        return res.json();
-      });
-
+      const fetch1 = fetch(`/api/movie-info?id=${id}&vod_id=${id}`).then((res) => { if (!res.ok) throw new Error(); return res.json(); });
+      const fetch2 = fetch(`/api/xtream?action=get_vod_info&vod_id=${id}`).then((res) => { if (!res.ok) throw new Error(); return res.json(); });
       return await Promise.any([fetch1, fetch2]);
     },
     enabled: !!id,
     staleTime: 10 * 60 * 1000,
   });
 
-  const { isFav, toggleFav } = useLibrary();
-
-  const playerContainerRef = useRef<HTMLDivElement>(null);
-  const actorScrollRef = useRef<HTMLDivElement>(null);
-  const lastTapRef = useRef<number>(0);
-
-  const isDragX = useRef(false);
-  const startX = useRef(0);
-  const scrollLeft = useRef(0);
-  const [isDraggingX, setIsDraggingX] = useState(false);
-
-  const onMouseDownX = (e: React.MouseEvent<HTMLDivElement>, ref: any) => {
-    if (!ref.current) return;
-    isDragX.current = true;
-    setIsDraggingX(false);
-    startX.current = e.pageX - ref.current.offsetLeft;
-    scrollLeft.current = ref.current.scrollLeft;
-  };
-
-  const onMouseMoveX = (e: React.MouseEvent<HTMLDivElement>, ref: any) => {
-    if (!isDragX.current || !ref.current) return;
-    e.preventDefault();
-    const x = e.pageX - ref.current.offsetLeft;
-    const walk = (x - startX.current) * 1.5;
-    if (Math.abs(walk) > 5) {
-      setIsDraggingX(true);
-    }
-    ref.current.scrollLeft = scrollLeft.current - walk;
-  };
-
-  const onMouseUpOrLeaveX = () => {
-    isDragX.current = false;
-    setTimeout(() => setIsDraggingX(false), 50);
-  };
-
-  const handleFullscreenLandscape = async () => {
-    const elem = playerContainerRef.current;
-    if (!elem) return;
-
-    try {
-      if (elem.requestFullscreen) {
-        await elem.requestFullscreen();
-      } else if ((elem as any).webkitRequestFullscreen) {
-        await (elem as any).webkitRequestFullscreen();
-      }
-      if (window.screen?.orientation && "lock" in window.screen.orientation) {
-        await (window.screen.orientation as any).lock("landscape").catch(() => {});
-      }
-    } catch (err) {
-      console.error("Erreur Plein Écran:", err);
-    }
-  };
-
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      handleFullscreenLandscape();
-    }
-    lastTapRef.current = now;
-  };
-
-  if (isLoading) return <MovieSkeleton />;
-  if (isError || !data || !id)
-    return <p className="px-8 py-24 text-center text-red-300">Impossible de charger le film.</p>;
+  const { favorites, toggleFav, progress } = useLibrary();
 
   const info = data?.info || {};
   const movieData = data?.movie_data || {};
   
-  const title = movieData?.name || info?.name || info?.title || movieData?.title || "Film Inconnu";
+  const rawTitle = movieData?.name || info?.name || info?.title || movieData?.title || "Film Inconnu";
+  const title = cleanMovieTitle(rawTitle);
   const rating = ratingNum(info?.rating);
-  const year = yearFrom(info?.releaseDate || info?.releasedate, title);
-  const fav = isFav("movies", Number(id));
+  const year = yearFrom(info?.releaseDate || info?.releasedate, rawTitle);
   const ext = info?.container_extension || movieData?.container_extension || "mp4";
-  
   const youtubeTrailer = info?.youtube_trailer || movieData?.youtube_trailer;
+  
+  const directorName = info?.director ? String(info.director).split(',')[0].trim() : undefined;
 
-  const castList = info?.cast
-    ? info.cast.split(",").map((actor: string) => actor.trim()).filter(Boolean)
-    : [];
+  const fanart = useFanartMovie(rawTitle, info?.tmdb_id || movieData?.tmdb_id);
+
+  const rawPoster = fanart?.poster || info?.cover || movieData?.movie_image || info?.poster_path || movieData?.poster_path;
+  const backdrop = fanart?.backdrop || info?.backdrop_path?.[0] || info?.backdrop || rawPoster;
+  const currentPoster = rawPoster;
+
+  const favKey = `movies:${id}`;
+  const isFavMovie = !!favorites[favKey];
+  const resumePosition = progress[`movie:${id}`]?.position ?? 0;
+
+  const castList = useMemo(() => {
+    if (!info?.cast) return [];
+    return String(info.cast).split(",").map((v) => v.trim()).filter(Boolean);
+  }, [info?.cast]);
+
+  const handleFullscreen = async () => {
+    const element = playerContainerRef.current;
+    if (!element) return;
+    try {
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      }
+      if (window.screen?.orientation && "lock" in window.screen.orientation) {
+        await (window.screen.orientation as any).lock("landscape").catch(() => {});
+      }
+    } catch {}
+  };
+
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) handleFullscreen();
+    lastTapRef.current = now;
+  };
+
+  if (isLoading) return <MovieSkeleton />;
+  if (isError || !data || !id) return <div className="min-h-screen grid place-items-center bg-[#060608] text-white/40">Impossible de charger le film.</div>;
 
   return (
-    <div className="min-h-screen bg-ink-950 text-white p-3 sm:p-6 space-y-6 select-none pb-24">
-      <style jsx global>{`
-        .perspective { perspective: 1000px; }
-        .transform-style-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-        .rotate-y-180 { transform: rotateY(180deg); }
-      `}</style>
+    // NOUVEAU: Disposition 100% sans scroll vertical, parfaitement centrée
+    <main className="h-[100dvh] w-full overflow-hidden bg-[#060608] text-white flex flex-col relative">
+      
+      {/* BACKGROUND */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        {backdrop && (
+          <motion.img
+            key={backdrop} initial={{ opacity: 0, scale: 1.025 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9 }}
+            src={backdrop || undefined} alt="" className="absolute inset-0 h-full w-full object-cover object-center"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#060608] via-[#060608]/92 via-[40%] to-[#060608]/20" />
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#060608] via-[#060608]/85 via-[85%] to-transparent" />
+      </div>
 
-      {/* HERO BANNIÈRE */}
-      <DetailHero
-        backdrop={info?.backdrop_path?.[0] || info?.backdrop}
-        poster={info?.cover || movieData?.movie_image}
-        title={title}
-        fav={fav}
-        onToggleFav={() =>
-          toggleFav("movies", { id: Number(id), name: cleanName(title), poster: info?.cover || movieData?.movie_image })
-        }
+      {/* BOUTON RETOUR */}
+      <button
+        type="button"
+        onClick={() => { if (window.history.length > 1) { router.back(); } else { router.push("/movies"); } }}
+        className="absolute left-6 top-6 z-50 inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.12] bg-black/30 px-4 text-xs font-medium text-white/75 backdrop-blur-2xl transition hover:bg-white/[0.15] hover:text-white"
       >
-        <div className="space-y-5 max-w-4xl">
-          <div>
-            {/* 🔴 C'est ici qu'on utilise le nouveau composant ClearLogo */}
-            <ClearLogo title={title} tmdbId={info?.tmdb_id || movieData?.tmdb_id} type="movie" />
-            
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-fog-200">
-              {rating > 0 && (
-                <span className="flex items-center gap-1 font-bold text-yellow-400 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm">
-                  <Star className="h-4 w-4 fill-yellow-400" /> {rating.toFixed(1)}
-                </span>
-              )}
-              {year && (
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4 opacity-70" /> {year}
-                </span>
-              )}
-              {info?.genre && <span className="opacity-90">{info.genre}</span>}
-              {info?.duration && (
-                <span className="flex items-center gap-1 opacity-90">
-                  <Clock className="w-4 h-4 opacity-70" /> {info.duration}
-                </span>
-              )}
-            </div>
-          </div>
+        <ArrowLeft className="h-4 w-4" /> Retour
+      </button>
 
-          <AnimatePresence>
-            {playerMode === "none" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                className="flex items-center gap-3 pt-2"
-              >
+      {/* CONTAINER PRINCIPAL : SYMBIOSIS (Centré verticalement) */}
+      <div className="relative z-10 flex-1 w-full max-w-[1550px] mx-auto px-6 sm:px-10 flex flex-col items-center justify-center h-full">
+        
+        {/* Wrapper pour garder un espacement constant */}
+        <div className="w-full flex flex-col gap-10 lg:gap-14">
+          
+          {/* LIGNE DU HAUT : Infos + Lecteur/Réalisateur */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] xl:grid-cols-[1.2fr_1fr] gap-10 lg:gap-16 items-center w-full">
+            
+            {/* COLONNE GAUCHE */}
+            <div className="flex flex-col w-full">
+              
+              <div className="mb-5 lg:mb-6 flex items-end justify-start min-h-[90px]">
+                {fanart?.logo ? (
+                   <img src={fanart.logo || undefined} alt={title} className="max-h-[120px] max-w-full object-contain object-left drop-shadow-2xl" />
+                ) : (
+                   <h1 className="text-4xl lg:text-6xl font-bold leading-tight tracking-tight drop-shadow-lg text-white">
+                     {title}
+                   </h1>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 text-xs lg:text-sm text-white/75 font-medium mb-5">
+                {rating > 0 && (
+                  <span className="flex items-center gap-1.5 text-yellow-400">
+                    <Star className="h-4 w-4 fill-current" /> {rating.toFixed(1)}
+                  </span>
+                )}
+                {year && <span>• {year}</span>}
+                {info?.genre && <span>• {info.genre}</span>}
+                {info?.duration && <span>• {formatDuration(info.duration)}</span>}
+              </div>
+
+              {(info?.plot || info?.description) && (
+                <p className="max-w-2xl line-clamp-4 text-sm lg:text-[15px] leading-relaxed text-white/70 mb-8">
+                  {info.plot || info.description}
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-4 items-center">
                 <button
+                  type="button"
                   onClick={() => setPlayerMode("movie")}
-                  className="bg-iris-600 hover:bg-iris-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] transform hover:scale-105"
+                  className="relative h-12 lg:h-[52px] overflow-hidden rounded-full border border-white/20 bg-white px-8 lg:px-10 shadow-[0_0_40px_rgba(255,255,255,0.25)] transition-transform hover:scale-[1.04] hover:bg-gray-200 text-black"
                 >
-                  <Play className="w-5 h-5 fill-white" /> Play
+                  <span className="flex items-center gap-2.5 text-sm font-bold">
+                    <Play className="h-4 w-4 fill-current" /> {resumePosition > 15 ? "Reprendre" : "Regarder le film"}
+                  </span>
                 </button>
-                
-                {youtubeTrailer ? (
+
+                {youtubeTrailer && (
                   <button
                     onClick={() => setPlayerMode("trailer")}
-                    className="bg-ink-900/80 hover:bg-ink-800 border border-white/10 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors backdrop-blur-md"
+                    className="flex h-12 lg:h-[52px] items-center gap-2.5 rounded-full border border-white/15 bg-white/[0.08] px-6 lg:px-7 text-sm font-medium text-white backdrop-blur-xl transition hover:bg-white/20"
                   >
-                    <Film className="w-5 h-5 text-red-500" /> Bande-annonce
+                    <Film className="h-4 w-4" /> Bande-annonce
                   </button>
-                ) : (
-                  <a
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanName(title) + " trailer bande annonce")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-ink-900/80 hover:bg-ink-800 border border-white/10 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors backdrop-blur-md"
-                  >
-                    <Film className="w-5 h-5 text-red-500" /> Rechercher Bande-annonce
-                  </a>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </DetailHero>
 
-      <motion.div
-        layout="position"
-        transition={smoothTransition}
-        className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start relative w-full pt-2"
-      >
-        <AnimatePresence mode="popLayout">
-          {playerMode !== "none" && (
-            <motion.div
-              key="movie-player"
-              initial={{ opacity: 0, scale: 0.95, x: -20 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.95, x: -20 }}
-              transition={smoothTransition}
-              className="w-full lg:w-[50%] shrink-0 space-y-2.5 bg-[#12141c] border border-white/10 rounded-2xl p-3 sm:p-4 sticky top-4 z-40 shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-iris-400 truncate max-w-[70%]">
-                  {cleanName(title)} {playerMode === "trailer" && " - Bande-annonce"}
-                </h2>
-                <div className="flex items-center gap-1">
-                  {playerMode === "movie" && (
-                    <button
-                      onClick={handleFullscreenLandscape}
-                      className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
-                      title="Plein Écran Horizontal"
-                    >
-                      <Maximize className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setPlayerMode("none")}
-                    className="text-fog-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
-                    title="Fermer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div
-                ref={playerContainerRef}
-                onClick={handleDoubleTap}
-                className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-white/5 cursor-pointer shadow-inner"
-              >
-                {playerMode === "movie" ? (
-                  <div className="absolute inset-0 flex items-center justify-center [&>div]:w-full [&>div]:h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain">
-                    <VideoPlayer
-                      key={id}
-                      sources={[
-                        ext === "mp4"
-                          ? `/api/stream-vod?type=movie&id=${id}&ext=mp4`
-                          : `/api/transcode?type=movie&id=${id}&ext=${ext}`
-                      ]}
-                      ext={ext}
-                      isLive={false}
-                      title={cleanName(title)}
-                    />
-                  </div>
-                ) : (
-                  <iframe 
-                    src={`https://www.youtube.com/embed/${youtubeTrailer}?autoplay=1`}
-                    className="w-full h-full border-0"
-                    allow="autoplay; encrypted-media; fullscreen"
-                    allowFullScreen
-                  />
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <motion.div
-          layout="position"
-          transition={smoothTransition}
-          className={cn(
-            "flex-1 w-full space-y-4 sm:space-y-6 transition-all duration-500",
-            playerMode !== "none" ? "lg:w-[50%]" : "lg:w-full"
-          )}
-        >
-          <div className="bg-[#181a24] border border-white/5 rounded-2xl p-4 sm:p-6 shadow-lg">
-            <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-3">
-              <BookOpen className="w-4 h-4 text-iris-400" /> Synopsis & Histoire
-            </h3>
-            <p className="text-xs sm:text-sm leading-relaxed text-fog-300 font-light">
-              {info?.plot || info?.description || "Aucun synopsis disponible pour ce film."}
-            </p>
-            {info?.director && (
-              <p className="mt-4 text-xs text-fog-400">
-                Réalisateur : <span className="font-medium text-white">{info.director}</span>
-              </p>
-            )}
-          </div>
-
-          {castList.length > 0 && (
-            <div className="bg-[#181a24] border border-white/5 rounded-2xl p-4 sm:p-6 shadow-lg">
-              <h3 className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-                <User className="w-4 h-4 text-iris-400" /> Casting / Acteurs
-              </h3>
-              <div 
-                ref={actorScrollRef}
-                onMouseDown={(e) => onMouseDownX(e, actorScrollRef)}
-                onMouseMove={(e) => onMouseMoveX(e, actorScrollRef)}
-                onMouseUp={onMouseUpOrLeaveX}
-                onMouseLeave={onMouseUpOrLeaveX}
-                onClickCapture={(e) => { if (isDraggingX) e.stopPropagation(); }}
-                className="flex gap-2 overflow-x-auto pb-2 scrollbar-none cursor-grab active:cursor-grabbing"
-              >
-                {castList.map((actor: string, idx: number) => (
-                  <FlipActorCard key={idx} name={actor} />
-                ))}
+                <button
+                  type="button"
+                  onClick={() => toggleFav("movies", { id: Number(id), name: title, poster: currentPoster })}
+                  className="flex h-12 lg:h-[52px] items-center gap-2.5 rounded-full border border-white/15 bg-white/[0.08] px-5 lg:px-6 text-sm font-medium text-white backdrop-blur-xl transition hover:bg-white/20"
+                >
+                  {isFavMovie ? <Heart className="h-4 w-4 fill-red-500 text-red-500" /> : <Plus className="h-4 w-4" />}
+                  Ma liste
+                </button>
               </div>
             </div>
-          )}
-        </motion.div>
 
-      </motion.div>
-    </div>
+            {/* COLONNE DROITE : LECTEUR / DIRECTEUR */}
+            <div className="relative w-full aspect-video rounded-[24px] overflow-hidden border border-white/10 shadow-[0_25px_70px_rgba(0,0,0,0.6)] group bg-[#07070a]">
+              <AnimatePresence mode="wait">
+                
+                {/* ETAT 1 : CARTE DU REALISATEUR */}
+                {playerMode === "none" ? (
+                  <motion.div
+                    key="director-card"
+                    initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
+                    transition={blurTransition}
+                    className="absolute inset-0 cursor-pointer"
+                    onClick={() => setPlayerMode("movie")}
+                  >
+                    <DirectorShowcase name={directorName} backdrop={backdrop || currentPoster} />
+                    
+                    {/* Icône de Play au survol */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-50">
+                      <div className="h-20 w-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-[0_0_50px_rgba(255,255,255,0.2)]">
+                        <Play className="h-10 w-10 text-white fill-white translate-x-1" />
+                      </div>
+                    </div>
+                  </motion.div>
+
+                ) : (
+
+                  /* ETAT 2 : LECTEUR VIDEO (Film ou Trailer) */
+                  <motion.div
+                    key="video-player"
+                    initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+                    transition={blurTransition}
+                    className="absolute inset-0 flex flex-col bg-black z-20"
+                  >
+                    <div className="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-black/95 to-transparent z-30 flex items-center justify-between px-5 opacity-0 hover:opacity-100 transition-opacity duration-300">
+                       <span className="text-sm text-white/90 font-medium truncate pr-4 drop-shadow-md">
+                         {title} {playerMode === "trailer" ? "(Bande-annonce)" : ""}
+                       </span>
+                       <div className="flex gap-3">
+                         {playerMode === "movie" && (
+                           <button onClick={handleFullscreen} className="text-white/70 hover:text-white transition"><Maximize className="w-5 h-5" /></button>
+                         )}
+                         <button onClick={() => setPlayerMode("none")} className="text-white/70 hover:text-white transition"><X className="w-6 h-6" /></button>
+                       </div>
+                    </div>
+                    <div className="w-full h-full relative z-20" ref={playerContainerRef} onClick={handleDoubleTap}>
+                      {playerMode === "movie" ? (
+                        <VideoPlayer
+                          key={id}
+                          sources={[ext === "mp4" ? `/api/stream-vod?type=movie&id=${id}&ext=mp4` : `/api/transcode?type=movie&id=${id}&ext=${ext}`]}
+                          ext={ext}
+                          isLive={false}
+                          mediaType="movie"
+                          title={title}
+                          poster={backdrop}
+                          startTime={resumePosition > 15 ? resumePosition : 0}
+                        />
+                      ) : (
+                        <iframe src={`https://www.youtube.com/embed/${youtubeTrailer}?autoplay=1`} className="w-full h-full border-0" allow="autoplay; encrypted-media; fullscreen" allowFullScreen />
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+          </div>
+
+          {/* LIGNE DU BAS : Casting */}
+          <div className="w-full">
+            {castList.length > 0 && <CastingShowcase actors={castList} movieLogo={fanart?.logo} />}
+          </div>
+
+        </div>
+      </div>
+    </main>
   );
 }
 
+/* =========================================================
+   SKELETON
+========================================================= */
+
 function MovieSkeleton() {
   return (
-    <div className="px-5 pt-40 sm:px-8">
-      <div className="flex gap-6">
-        <Skeleton className="hidden aspect-[2/3] w-44 sm:block rounded-xl" />
+    <div className="h-screen w-screen bg-[#060608] flex flex-col px-10 py-20 overflow-hidden">
+      <Skeleton className="h-[120px] w-1/3 rounded-[10px] bg-white/[0.05] mb-8" />
+      <div className="flex w-full gap-10">
         <div className="flex-1 space-y-4">
-          <Skeleton className="h-10 w-2/3" />
-          <Skeleton className="h-6 w-1/3" />
-          <Skeleton className="h-12 w-40 mt-4" />
+          <Skeleton className="h-6 w-1/2 rounded-[10px] bg-white/[0.05]" />
+          <Skeleton className="h-24 w-full rounded-[10px] bg-white/[0.05]" />
+          <div className="flex gap-4 pt-4">
+             <Skeleton className="h-12 w-40 rounded-full bg-white/[0.05]" />
+             <Skeleton className="h-12 w-40 rounded-full bg-white/[0.05]" />
+          </div>
         </div>
+        <Skeleton className="w-[600px] aspect-video rounded-[24px] bg-white/[0.05]" />
       </div>
-      <div className="mt-12 space-y-6">
-         <Skeleton className="h-32 w-full rounded-2xl" />
-         <Skeleton className="h-48 w-full rounded-2xl" />
-      </div>
+      <Skeleton className="mt-14 h-[120px] w-full rounded-[20px] bg-white/[0.05]" />
     </div>
   );
 }

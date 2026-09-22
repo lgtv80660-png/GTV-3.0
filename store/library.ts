@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware"; // 🔴 NOUVEAU: Permet de sauvegarder dans le navigateur
 
 interface LibraryItem {
   id: number | string;
@@ -16,19 +17,26 @@ interface LibraryState {
   isFav: (type: string, id: number | string) => boolean;
 }
 
-export const useLibrary = create<LibraryState>()((set, get) => ({
-  favorites: {},
-  progress: {},
-  toggleFav: (type: string, item: LibraryItem) =>
-    set((state: LibraryState) => {
-      const key = `${type}:${item.id}`;
-      const next = { ...state.favorites };
-      if (next[key]) {
-        delete next[key];
-      } else {
-        next[key] = item;
-      }
-      return { favorites: next };
+export const useLibrary = create<LibraryState>()(
+  persist(
+    (set, get) => ({
+      favorites: {},
+      progress: {},
+      toggleFav: (type: string, item: LibraryItem) =>
+        set((state: LibraryState) => {
+          const key = `${type}:${item.id}`;
+          const next = { ...state.favorites };
+          if (next[key]) {
+            delete next[key];
+          } else {
+            next[key] = item;
+          }
+          return { favorites: next };
+        }),
+      isFav: (type: string, id: number | string) => !!get().favorites[`${type}:${id}`],
     }),
-  isFav: (type: string, id: number | string) => !!get().favorites[`${type}:${id}`],
-}));
+    {
+      name: "gtv-library-storage", // Nom de la sauvegarde locale
+    }
+  )
+);
