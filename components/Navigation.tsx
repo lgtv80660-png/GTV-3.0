@@ -38,25 +38,15 @@ type AccountData = {
 
 type ContinueItem = {
   type: "movie" | "series";
-
   id: string | number;
-
   title: string;
-
   image?: string | null;
-
   seriesId?: string | number | null;
-
   season?: number | string | null;
-
   episode?: number | string | null;
-
   ext?: string | null;
-
   position?: number;
-
   duration?: number;
-
   updatedAt?: number;
 };
 
@@ -67,28 +57,24 @@ type ContinueItem = {
 const navItems = [
   {
     name: "Live TV",
-    href: "/",
+    href: "/live",
     icon: Tv,
   },
-
   {
     name: "Films",
     href: "/movies",
     icon: Film,
   },
-
   {
     name: "Séries",
     href: "/series",
     icon: MonitorPlay,
   },
-
   {
     name: "Recherche",
     href: "/search",
     icon: Search,
   },
-
   {
     name: "Favoris",
     href: "/favorites",
@@ -536,10 +522,11 @@ export function Navigation() {
         />
 
         {/* =================================================
-            LOGO
+            LOGO (Modifié en Link)
         ================================================= */}
 
-        <div
+        <Link
+          href="/"
           className="
             relative
             z-10
@@ -664,7 +651,7 @@ export function Navigation() {
               Cinematic OS
             </p>
           </div>
-        </div>
+        </Link>
 
         {/* =================================================
             NAVIGATION
