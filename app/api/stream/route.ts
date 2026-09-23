@@ -14,8 +14,8 @@ export async function GET(req: Request) {
       return new Response("Missing Live Stream ID", { status: 400 });
     }
 
-    // Redirection directe vers l'API proxy HLS dédiée au Live
-    return NextResponse.redirect(`${origin}/api/hls?id=${id}`);
+    // Redirection directe vers l'API proxy HLSSG (qui marche parfaitement pour le Live)
+    return NextResponse.redirect(`${origin}/api/hlssg?id=${id}`);
   } catch (err: any) {
     return new Response(`Stream Auth Error: ${err.message}`, { status: 401 });
   }
