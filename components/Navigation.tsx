@@ -1,21 +1,13 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-
-import {
-  usePathname,
-  useRouter,
-} from "next/navigation";
-
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronRight,
   Film,
   Heart,
+  Home,
   LogOut,
   MonitorPlay,
   Play,
@@ -54,7 +46,12 @@ type ContinueItem = {
    NAV
 ========================================================= */
 
-const navItems = [
+const desktopNavItems = [
+  {
+    name: "Accueil",
+    href: "/",
+    icon: Home,
+  },
   {
     name: "Live TV",
     href: "/live",
@@ -83,73 +80,76 @@ const navItems = [
   },
 ];
 
+const mobileNavItems = [
+  {
+    name: "Accueil",
+    href: "/",
+    icon: Home,
+  },
+  {
+    name: "Films",
+    href: "/movies",
+    icon: Film,
+  },
+  {
+    name: "Séries",
+    href: "/series",
+    icon: MonitorPlay,
+  },
+  {
+    name: "Live",
+    href: "/live",
+    icon: Tv,
+  },
+  {
+    name: "Recherche",
+    href: "/search",
+    icon: Search,
+  },
+];
+
 /* =========================================================
    HELPERS
 ========================================================= */
 
-function formatExpiration(
-  value?: string | number | null
-) {
+function formatExpiration(value?: string | number | null) {
   if (!value) {
     return "Expiration inconnue";
   }
 
-  const raw =
-    Number(value);
+  const raw = Number(value);
 
-  if (
-    !Number.isFinite(raw) ||
-    raw <= 0
-  ) {
+  if (!Number.isFinite(raw) || raw <= 0) {
     return "Sans expiration";
   }
 
-  const date =
-    new Date(
-      raw * 1000
-    );
+  const date = new Date(raw * 1000);
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return "Expiration inconnue";
   }
 
-  return new Intl.DateTimeFormat(
-    "fr-FR",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
-function getInitials(
-  username?: string | null
-) {
+function getInitials(username?: string | null) {
   if (!username) {
-    return "G";
+    return "R";
   }
 
-  const clean =
-    username
-      .trim()
-      .replace(
-        /[_\-.]+/g,
-        " "
-      );
+  const clean = username
+    .trim()
+    .replace(/[_\-.]+/g, " ");
 
-  const parts =
-    clean
-      .split(/\s+/)
-      .filter(Boolean);
+  const parts = clean
+    .split(/\s+/)
+    .filter(Boolean);
 
-  if (
-    parts.length > 1
-  ) {
+  if (parts.length > 1) {
     return (
       parts[0][0] +
       parts[1][0]
@@ -161,9 +161,7 @@ function getInitials(
     .toUpperCase();
 }
 
-function getContinuePercent(
-  item: ContinueItem | null
-) {
+function getContinuePercent(item: ContinueItem | null) {
   if (
     !item?.duration ||
     !item?.position ||
@@ -176,16 +174,12 @@ function getContinuePercent(
     100,
     Math.max(
       0,
-      (item.position /
-        item.duration) *
-        100
+      (item.position / item.duration) * 100
     )
   );
 }
 
-function buildResumeHref(
-  item: ContinueItem
-) {
+function buildResumeHref(item: ContinueItem) {
   const ext =
     item.ext || "mp4";
 
@@ -197,10 +191,7 @@ function buildResumeHref(
       )
     );
 
-  if (
-    item.type ===
-    "series"
-  ) {
+  if (item.type === "series") {
     return (
       `/watch?type=series` +
       `&id=${item.id}` +
@@ -230,6 +221,47 @@ function buildResumeHref(
         : ""
     }`
   );
+}
+
+function remainingText(item: ContinueItem | null) {
+  if (
+    !item?.duration ||
+    item.duration <= 0
+  ) {
+    return "";
+  }
+
+  const remaining =
+    Math.max(
+      0,
+      Number(item.duration) -
+        Number(item.position || 0)
+    );
+
+  const minutes =
+    Math.ceil(remaining / 60);
+
+  if (minutes <= 0) {
+    return "";
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min restantes`;
+  }
+
+  const hours =
+    Math.floor(minutes / 60);
+
+  const mins =
+    minutes % 60;
+
+  if (mins === 0) {
+    return `${hours} h restante${
+      hours > 1 ? "s" : ""
+    }`;
+  }
+
+  return `${hours} h ${mins} min`;
 }
 
 /* =========================================================
@@ -266,7 +298,7 @@ export function Navigation() {
     );
 
   /* =======================================================
-     XTREAM ACCOUNT
+     ACCOUNT
   ======================================================= */
 
   useEffect(() => {
@@ -315,7 +347,7 @@ export function Navigation() {
   }, [pathname]);
 
   /* =======================================================
-     CONTINUE WATCHING
+     CONTINUE
   ======================================================= */
 
   useEffect(() => {
@@ -334,10 +366,7 @@ export function Navigation() {
             );
 
           if (!raw) {
-            setContinueItem(
-              null
-            );
-
+            setContinueItem(null);
             return;
           }
 
@@ -350,10 +379,7 @@ export function Navigation() {
             !parsed?.id ||
             !parsed?.title
           ) {
-            setContinueItem(
-              null
-            );
-
+            setContinueItem(null);
             return;
           }
 
@@ -459,11 +485,15 @@ export function Navigation() {
       continueItem
     );
 
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
   return (
     <>
-      {/* =====================================================
-          DESKTOP SIDEBAR
-      ===================================================== */}
+      {/* ===================================================
+          DESKTOP
+      =================================================== */}
 
       <nav
         className="
@@ -486,13 +516,15 @@ export function Navigation() {
           overflow-hidden
 
           border-r
-          border-white/[0.06]
+          border-white/[0.055]
 
           bg-[#070709]/88
+          backdrop-blur-[34px]
 
-          backdrop-blur-[32px]
-
-          shadow-[inset_-1px_0_0_rgba(255,255,255,.025),18px_0_60px_rgba(0,0,0,.20)]
+          shadow-[
+            inset_-1px_0_0_rgba(255,255,255,.025),
+            18px_0_60px_rgba(0,0,0,.22)
+          ]
 
           transition-[width]
           duration-500
@@ -501,28 +533,27 @@ export function Navigation() {
           select-none
         "
       >
-        {/* ambient glow */}
+        {/* AMBIENT GLOW */}
 
         <div
           className="
             pointer-events-none
             absolute
-            -left-16
+            -left-20
             top-0
 
-            h-64
-            w-64
+            h-72
+            w-72
 
             rounded-full
 
-            bg-[#d8ccff]/[0.04]
-
+            bg-[#d8ccff]/[0.045]
             blur-3xl
           "
         />
 
         {/* =================================================
-            LOGO (Modifié en Link)
+            BRAND
         ================================================= */}
 
         <Link
@@ -532,7 +563,7 @@ export function Navigation() {
             z-10
 
             flex
-            h-[74px]
+            h-[76px]
 
             shrink-0
             items-center
@@ -540,7 +571,7 @@ export function Navigation() {
             border-b
             border-white/[0.05]
 
-            px-[18px]
+            px-[17px]
           "
         >
           <div
@@ -548,8 +579,8 @@ export function Navigation() {
               relative
 
               grid
-              h-9
-              w-9
+              h-[38px]
+              w-[38px]
 
               shrink-0
               place-items-center
@@ -559,18 +590,22 @@ export function Navigation() {
               rounded-[13px]
 
               border
-              border-white/[0.14]
+              border-[#d8ccff]/25
 
-              bg-white/[0.08]
+              bg-gradient-to-br
+              from-[#d8ccff]/20
+              to-white/[0.035]
 
-              text-sm
-              font-black
+              text-[16px]
+              font-semibold
 
-              text-white
+              text-[#eee9ff]
 
-              backdrop-blur-2xl
-
-              shadow-[inset_0_1px_0_rgba(255,255,255,.20),0_10px_30px_rgba(0,0,0,.28)]
+              shadow-[
+                inset_0_1px_0_rgba(255,255,255,.22),
+                0_10px_30px_rgba(0,0,0,.32),
+                0_0_28px_rgba(216,204,255,.07)
+              ]
             "
           >
             <div
@@ -579,15 +614,23 @@ export function Navigation() {
                 absolute
                 inset-x-0
                 top-0
+
                 h-1/2
 
                 bg-gradient-to-b
-                from-white/[0.16]
+                from-white/[0.18]
                 to-transparent
               "
             />
 
-            <span className="relative z-10">
+            <span
+              className="
+                relative
+                z-10
+                font-serif
+                tracking-[-0.08em]
+              "
+            >
               G
             </span>
           </div>
@@ -609,27 +652,27 @@ export function Navigation() {
             <div
               className="
                 flex
-                items-baseline
-                gap-1
+                items-center
+                gap-2
               "
             >
               <span
                 className="
-                  text-sm
-                  font-bold
-                  tracking-[0.12em]
+                  font-serif
+                  text-[17px]
+                  tracking-[0.24em]
                   text-white
                 "
               >
-                G-TV
+                GTV
               </span>
 
               <span
                 className="
-                  text-[9px]
+                  text-[7px]
                   font-semibold
-                  tracking-[0.18em]
-                  text-[#d8ccff]/75
+                  tracking-[0.14em]
+                  text-[#d8ccff]/65
                 "
               >
                 3.0
@@ -638,23 +681,22 @@ export function Navigation() {
 
             <p
               className="
-                mt-0.5
+                mt-[2px]
 
-                text-[8px]
-
+                text-[7px]
                 uppercase
-                tracking-[0.22em]
+                tracking-[0.24em]
 
-                text-white/25
+                text-white/23
               "
             >
-              Cinematic OS
+              Vision cinématique
             </p>
           </div>
         </Link>
 
         {/* =================================================
-            NAVIGATION
+            NAV ITEMS
         ================================================= */}
 
         <div
@@ -662,13 +704,13 @@ export function Navigation() {
             relative
             z-10
 
-            space-y-1.5
+            space-y-1
 
             px-3
             py-4
           "
         >
-          {navItems.map(
+          {desktopNavItems.map(
             (item) => {
               const active =
                 isItemActive(
@@ -706,16 +748,19 @@ export function Navigation() {
                     ${
                       active
                         ? `
-                          border-[#d8ccff]/20
+                          border-[#d8ccff]/18
                           bg-[#d8ccff]/[0.07]
                           text-white
 
-                          shadow-[inset_0_1px_0_rgba(255,255,255,.08)]
+                          shadow-[
+                            inset_0_1px_0_rgba(255,255,255,.08),
+                            0_10px_30px_rgba(216,204,255,.035)
+                          ]
                         `
                         : item.isFavorite
                         ? `
                           border-transparent
-                          text-rose-300/55
+                          text-rose-300/50
 
                           hover:border-white/[0.07]
                           hover:bg-white/[0.04]
@@ -723,11 +768,11 @@ export function Navigation() {
                         `
                         : `
                           border-transparent
-                          text-white/38
+                          text-white/36
 
                           hover:border-white/[0.07]
                           hover:bg-white/[0.04]
-                          hover:text-white/85
+                          hover:text-white/88
                         `
                     }
                   `}
@@ -737,7 +782,6 @@ export function Navigation() {
                       <div
                         className="
                           pointer-events-none
-
                           absolute
                           inset-x-0
                           top-0
@@ -745,8 +789,7 @@ export function Navigation() {
                           h-1/2
 
                           bg-gradient-to-b
-
-                          from-white/[0.08]
+                          from-white/[0.07]
                           to-transparent
                         "
                       />
@@ -766,7 +809,7 @@ export function Navigation() {
 
                           bg-[#d8ccff]
 
-                          shadow-[0_0_10px_rgba(216,204,255,.75)]
+                          shadow-[0_0_12px_rgba(216,204,255,.85)]
                         "
                       />
                     </>
@@ -787,14 +830,13 @@ export function Navigation() {
                   >
                     <Icon
                       className={`
-                        h-[19px]
-                        w-[19px]
+                        h-[18px]
+                        w-[18px]
 
                         ${
                           active
                             ? `
-                              text-[#e7e0ff]
-
+                              text-[#ece7ff]
                               drop-shadow-[0_0_10px_rgba(216,204,255,.35)]
                             `
                             : ""
@@ -809,6 +851,7 @@ export function Navigation() {
                       z-10
 
                       ml-1
+
                       min-w-[145px]
 
                       whitespace-nowrap
@@ -833,7 +876,7 @@ export function Navigation() {
         </div>
 
         {/* =================================================
-            CONTINUE WATCHING
+            CONTINUE
         ================================================= */}
 
         {continueItem && (
@@ -859,7 +902,6 @@ export function Navigation() {
             <div
               className="
                 mb-2
-
                 flex
                 items-center
                 justify-between
@@ -868,15 +910,22 @@ export function Navigation() {
               <p
                 className="
                   text-[8px]
+                  font-semibold
                   uppercase
                   tracking-[0.22em]
-                  text-white/28
+                  text-white/27
                 "
               >
                 Continuer
               </p>
 
-              <ChevronRight className="h-3 w-3 text-white/20" />
+              <ChevronRight
+                className="
+                  h-3
+                  w-3
+                  text-white/20
+                "
+              />
             </div>
 
             <Link
@@ -898,7 +947,7 @@ export function Navigation() {
                 rounded-[18px]
 
                 border
-                border-white/[0.09]
+                border-white/[0.085]
 
                 bg-[#101014]
 
@@ -911,8 +960,6 @@ export function Navigation() {
                 hover:-translate-y-[1px]
               "
             >
-              {/* COVER */}
-
               {continueItem.image ? (
                 <img
                   src={
@@ -946,21 +993,30 @@ export function Navigation() {
                     place-items-center
 
                     bg-gradient-to-br
-
                     from-[#17171d]
                     to-[#08080a]
                   "
                 >
                   {continueItem.type ===
                   "series" ? (
-                    <MonitorPlay className="h-7 w-7 text-white/15" />
+                    <MonitorPlay
+                      className="
+                        h-7
+                        w-7
+                        text-white/15
+                      "
+                    />
                   ) : (
-                    <Film className="h-7 w-7 text-white/15" />
+                    <Film
+                      className="
+                        h-7
+                        w-7
+                        text-white/15
+                      "
+                    />
                   )}
                 </div>
               )}
-
-              {/* CINEMATIC FADE */}
 
               <div
                 className="
@@ -968,9 +1024,8 @@ export function Navigation() {
                   inset-0
 
                   bg-gradient-to-t
-
                   from-black/95
-                  via-black/22
+                  via-black/20
                   to-black/5
                 "
               />
@@ -984,13 +1039,10 @@ export function Navigation() {
                   h-1/2
 
                   bg-gradient-to-b
-
-                  from-white/[0.08]
+                  from-white/[0.07]
                   to-transparent
                 "
               />
-
-              {/* PLAY GLASS */}
 
               <div
                 className="
@@ -1001,6 +1053,7 @@ export function Navigation() {
                   grid
                   h-8
                   w-8
+
                   place-items-center
 
                   rounded-full
@@ -1022,10 +1075,14 @@ export function Navigation() {
                   group-hover/continue:opacity-100
                 "
               >
-                <Play className="h-3.5 w-3.5 fill-current" />
+                <Play
+                  className="
+                    h-3.5
+                    w-3.5
+                    fill-current
+                  "
+                />
               </div>
-
-              {/* CONTENT */}
 
               <div
                 className="
@@ -1100,23 +1157,20 @@ export function Navigation() {
                       </>
                     )}
 
-                  {percent > 0 && (
+                  {remainingText(
+                    continueItem
+                  ) && (
                     <>
-                      <span>
-                        ·
-                      </span>
+                      <span>·</span>
 
                       <span>
-                        {Math.round(
-                          percent
+                        {remainingText(
+                          continueItem
                         )}
-                        %
                       </span>
                     </>
                   )}
                 </div>
-
-                {/* PROGRESS */}
 
                 {percent > 0 && (
                   <div
@@ -1142,7 +1196,6 @@ export function Navigation() {
                         rounded-full
 
                         bg-gradient-to-r
-
                         from-[#a991ff]
                         to-[#eeeaff]
 
@@ -1156,12 +1209,12 @@ export function Navigation() {
           </div>
         )}
 
-        {/* push account down */}
+        {/* PUSH ACCOUNT DOWN */}
 
         <div className="flex-1" />
 
         {/* =================================================
-            XTREAM ACCOUNT
+            ACCOUNT
         ================================================= */}
 
         <div
@@ -1170,7 +1223,7 @@ export function Navigation() {
             z-10
 
             border-t
-            border-white/[0.06]
+            border-white/[0.055]
 
             p-2.5
           "
@@ -1191,7 +1244,7 @@ export function Navigation() {
               border
               border-white/[0.075]
 
-              bg-white/[0.028]
+              bg-white/[0.027]
 
               backdrop-blur-2xl
 
@@ -1223,11 +1276,11 @@ export function Navigation() {
                 rounded-[13px]
 
                 border
-                border-[#d8ccff]/20
+                border-[#d8ccff]/18
 
                 bg-gradient-to-br
-                from-[#d8ccff]/15
-                to-white/[0.04]
+                from-[#d8ccff]/14
+                to-white/[0.035]
 
                 text-[10px]
                 font-bold
@@ -1238,7 +1291,13 @@ export function Navigation() {
               "
             >
               {accountLoading ? (
-                <User className="h-4 w-4 text-white/30" />
+                <User
+                  className="
+                    h-4
+                    w-4
+                    text-white/30
+                  "
+                />
               ) : (
                 initials
               )}
@@ -1262,7 +1321,6 @@ export function Navigation() {
                       accountActive
                         ? `
                           bg-emerald-400
-
                           shadow-[0_0_8px_rgba(52,211,153,.7)]
                         `
                         : `
@@ -1294,7 +1352,6 @@ export function Navigation() {
               {accountLoading ? (
                 <div className="space-y-1.5">
                   <div className="h-2.5 w-20 rounded-full bg-white/[0.07]" />
-
                   <div className="h-2 w-24 rounded-full bg-white/[0.04]" />
                 </div>
               ) : (
@@ -1340,14 +1397,20 @@ export function Navigation() {
                   <p
                     className="
                       mt-1
+
                       whitespace-nowrap
+
                       text-[8px]
+
                       text-white/28
                     "
                   >
                     Expire ·{" "}
+
                     <span className="text-white/42">
-                      {expiration}
+                      {
+                        expiration
+                      }
                     </span>
                   </p>
 
@@ -1363,8 +1426,10 @@ export function Navigation() {
                       "
                     >
                       Connexions{" "}
-                      {account.activeConnections ??
-                        0}
+                      {
+                        account.activeConnections ??
+                        0
+                      }
                       /
                       {
                         account.maxConnections
@@ -1375,7 +1440,7 @@ export function Navigation() {
               )}
             </div>
 
-            {/* SIGN OUT */}
+            {/* LOGOUT */}
 
             <button
               type="button"
@@ -1416,49 +1481,48 @@ export function Navigation() {
                 hover:text-rose-300
               "
             >
-              <LogOut className="h-[15px] w-[15px]" />
+              <LogOut
+                className="
+                  h-[15px]
+                  w-[15px]
+                "
+              />
             </button>
           </div>
         </div>
       </nav>
 
-      {/* =====================================================
-          MOBILE NAVIGATION
-      ===================================================== */}
+      {/* ===================================================
+          MOBILE
+      =================================================== */}
 
       <nav
         className="
-          md:hidden
-
-          fixed
-          bottom-3
-          left-3
-          right-3
-
+          relative
           z-50
-
-          h-[68px]
-
-          overflow-hidden
-
-          rounded-[24px]
-
-          border
+          
+          flex
+          w-full
+          min-h-[68px]
+          shrink-0
+          
+          items-center
+          justify-around
+          
+          border-t
           border-white/[0.11]
-
-          bg-[#0a0a0d]/82
-
-          px-2
-
-          backdrop-blur-[30px]
-
-          shadow-[inset_0_1px_0_rgba(255,255,255,.10),0_20px_60px_rgba(0,0,0,.50)]
+          
+          bg-[#09090c]/90
+          backdrop-blur-[32px]
+          
+          pb-[env(safe-area-inset-bottom)]
+          
+          md:hidden
         "
       >
         <div
           className="
             pointer-events-none
-
             absolute
             inset-x-0
             top-0
@@ -1466,7 +1530,6 @@ export function Navigation() {
             h-[46%]
 
             bg-gradient-to-b
-
             from-white/[0.08]
             to-transparent
           "
@@ -1478,13 +1541,14 @@ export function Navigation() {
             z-10
 
             flex
-            h-full
+            w-full
+            h-[68px]
 
             items-center
             justify-around
           "
         >
-          {navItems.map(
+          {mobileNavItems.map(
             (item) => {
               const active =
                 isItemActive(
@@ -1524,14 +1588,9 @@ export function Navigation() {
                     ${
                       active
                         ? `
-                          border-[#d8ccff]/20
-                          bg-[#d8ccff]/[0.08]
+                          border-[#d8ccff]/18
+                          bg-[#d8ccff]/[0.075]
                           text-white
-                        `
-                        : item.isFavorite
-                        ? `
-                          border-transparent
-                          text-rose-300/60
                         `
                         : `
                           border-transparent
@@ -1542,14 +1601,13 @@ export function Navigation() {
                 >
                   <Icon
                     className={`
-                      h-[19px]
-                      w-[19px]
+                      h-[18px]
+                      w-[18px]
 
                       ${
                         active
                           ? `
                             text-[#e7e0ff]
-
                             drop-shadow-[0_0_10px_rgba(216,204,255,.35)]
                           `
                           : ""
@@ -1560,7 +1618,8 @@ export function Navigation() {
                   <span
                     className="
                       mt-1
-                      text-[8px]
+
+                      text-[7.5px]
                       font-semibold
                     "
                   >
