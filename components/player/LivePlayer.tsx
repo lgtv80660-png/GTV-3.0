@@ -11,15 +11,19 @@ import {
 import {
   AlertTriangle,
   ArrowLeft,
+  ChevronRight,
   Loader2,
   Maximize,
   Minimize,
   Pause,
   PictureInPicture2,
   Play,
+  Radio,
   SkipForward,
+  Tv,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 
 import {
@@ -128,6 +132,74 @@ type AdServerResponse = {
   ads?: LiveAd[];
 };
 
+/* =========================================================
+   ANCIENNE API CINEPUB
+========================================================= */
+
+type LegacyAdResponse = {
+  status?: string;
+
+  active?: boolean;
+
+  ad?: {
+    id?: number;
+
+    brand?: string;
+
+    logo_url?: string | null;
+
+    title?: string;
+
+    video_url?: string;
+
+    asset_url?: string;
+
+    click_url?: string | null;
+
+    slot?: string;
+
+    trigger_time?: number;
+
+    duration_seconds?: number;
+
+    mode?: string;
+
+    description?: string;
+  };
+};
+
+/* =========================================================
+   FULLSCREEN NAVIGATION TYPES
+========================================================= */
+
+type FullscreenCategory = {
+  category_id: string;
+  category_name: string;
+};
+
+type FullscreenChannel = {
+  num: number;
+
+  name: string;
+
+  stream_id: number;
+
+  stream_icon: string;
+
+  category_id: string;
+};
+
+type LockableOrientation =
+  ScreenOrientation & {
+    lock?: (
+      orientation: "landscape"
+    ) => Promise<void>;
+  };
+
+/* =========================================================
+   PROPS
+========================================================= */
+
 type LivePlayerProps = {
   sources: string[];
 
@@ -145,41 +217,56 @@ type LivePlayerProps = {
 
   onBack?: () => void;
 
-  /**
-   * Optionnel.
-   * Si tu connais déjà le device :
-   *
-   * device="tv"
-   * device="mobile"
-   * device="desktop"
-   *
-   * Sinon détection automatique.
-   */
   device?: DeviceType;
+
+  categories?: FullscreenCategory[];
+
+  channels?: FullscreenChannel[];
+
+  selectedCategory?:
+    | FullscreenCategory
+    | null;
+
+  selectedChannelId?:
+    | number
+    | null;
+
+  loadingChannels?: boolean;
+
+  onSelectCategory?: (
+    category: FullscreenCategory
+  ) => void;
+
+  onSelectChannel?: (
+    channel: FullscreenChannel
+  ) => void;
+
+  onBackToCategories?: () => void;
 };
 
 /* =========================================================
    CONFIG
 ========================================================= */
 
-/**
- * false pendant les tests.
- *
- * Si plus tard tu veux remettre :
- * "premier zap gratuit"
- *
- * mets true.
+/*
+ * FALSE pendant les tests :
+ * même la première chaîne peut
+ * recevoir une publicité.
  */
-const FIRST_ZAP_FREE = false;
+const FIRST_ZAP_FREE =
+  false;
 
 let liveZapCount = 0;
 
 /* =========================================================
-   HELPERS
+   DEVICE
 ========================================================= */
 
 function detectDevice(): DeviceType {
-  if (typeof window === "undefined") {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return "tv";
   }
 
@@ -200,8 +287,9 @@ function detectDevice(): DeviceType {
   ];
 
   if (
-    tvPatterns.some((pattern) =>
-      ua.includes(pattern)
+    tvPatterns.some(
+      (pattern) =>
+        ua.includes(pattern)
     )
   ) {
     return "tv";
@@ -219,8 +307,7 @@ function detectDevice(): DeviceType {
 }
 
 /* =========================================================
-   API URL
-   AUCUN DOMAINE EN DUR
+   ADSERVER URL
 ========================================================= */
 
 function resolveApiUrl(): string {
@@ -241,7 +328,8 @@ function resolveApiUrl(): string {
   }
 
   if (
-    typeof window === "undefined"
+    typeof window ===
+    "undefined"
   ) {
     return configured;
   }
@@ -253,16 +341,7 @@ function resolveApiUrl(): string {
 }
 
 /* =========================================================
-   RESOLVE ASSET URL
-
-   API :
-   https://serveur.com/cinepub/api.php
-
-   ASSET :
-   uploads/client/pub.webm
-
-   RESULTAT :
-   https://serveur.com/cinepub/uploads/client/pub.webm
+   ASSET URL
 ========================================================= */
 
 function resolveAssetUrl(
@@ -295,24 +374,74 @@ function resolveAssetUrl(
 }
 
 /* =========================================================
-   EVENT API
+   ANALYTICS URL
+
+   Direct :
+   /cinepub-studio/api.php
+   ->
+   /cinepub-studio/event.php
 ========================================================= */
 
 function resolveEventUrl(
   apiUrl: string
 ): string {
+  const configuredEvent =
+    process.env
+      .NEXT_PUBLIC_ADSERVER_EVENT;
+
+  if (
+    configuredEvent
+  ) {
+    try {
+      return new URL(
+        configuredEvent,
+        typeof window !==
+          "undefined"
+          ? window.location.origin
+          : apiUrl
+      ).href;
+    } catch {}
+  }
+
   try {
-    return new URL(
-      "event.php",
-      apiUrl
-    ).href;
+    const url =
+      new URL(apiUrl);
+
+    /*
+     * L'analytics directe
+     * est sûre uniquement
+     * si on pointe réellement
+     * sur api.php.
+     */
+    if (
+      url.pathname.endsWith(
+        "/api.php"
+      )
+    ) {
+      url.pathname =
+        url.pathname.replace(
+          /api\.php$/,
+          "event.php"
+        );
+
+      url.search = "";
+
+      return url.href;
+    }
+
+    /*
+     * Avec /api/ad, pas
+     * d'endpoint event connu.
+     * On n'invente rien.
+     */
+    return "";
   } catch {
     return "";
   }
 }
 
 /* =========================================================
-   GRID 3x3 -> CSS
+   GRID 3x3
 ========================================================= */
 
 function gridToStyle(
@@ -363,30 +492,38 @@ function gridToStyle(
     );
 
   const left =
-    ((c1 - 1) / 3) * 100;
+    ((c1 - 1) / 3) *
+    100;
 
   const top =
-    ((r1 - 1) / 3) * 100;
+    ((r1 - 1) / 3) *
+    100;
 
   const width =
-    ((c2 - c1 + 1) / 3) *
+    ((c2 - c1 + 1) /
+      3) *
     100;
 
   const height =
-    ((r2 - r1 + 1) / 3) *
+    ((r2 - r1 + 1) /
+      3) *
     100;
 
   return {
     position: "absolute",
+
     left: `${left}%`,
+
     top: `${top}%`,
+
     width: `${width}%`,
+
     height: `${height}%`,
   };
 }
 
 /* =========================================================
-   DETECT VIDEO / IMAGE
+   VIDEO / IMAGE
 ========================================================= */
 
 function isVideoAsset(
@@ -398,14 +535,211 @@ function isVideoAsset(
       .toLowerCase();
 
   return (
-    clean.endsWith(".webm") ||
-    clean.endsWith(".mp4") ||
-    clean.endsWith(".mov")
+    clean.endsWith(
+      ".webm"
+    ) ||
+    clean.endsWith(
+      ".mp4"
+    ) ||
+    clean.endsWith(
+      ".mov"
+    )
   );
 }
 
 /* =========================================================
-   LIVE PLAYER
+   NORMALISE OLD + NEW CINEPUB
+========================================================= */
+
+function normalizeAdResponse(
+  raw: unknown,
+  currentDevice: DeviceType
+): AdServerResponse | null {
+  if (
+    !raw ||
+    typeof raw !==
+      "object"
+  ) {
+    return null;
+  }
+
+  const response =
+    raw as
+      | AdServerResponse
+      | LegacyAdResponse;
+
+  if (
+    response.status !==
+    "success"
+  ) {
+    return null;
+  }
+
+  /* =======================================================
+     NEW STUDIO 4
+  ======================================================= */
+
+  if (
+    "ads" in response &&
+    Array.isArray(
+      response.ads
+    )
+  ) {
+    const ads =
+      response.ads.filter(
+        (ad) =>
+          ad &&
+          ad.regie_type ===
+            "live" &&
+          !!ad.asset_url
+      );
+
+    if (
+      ads.length === 0
+    ) {
+      return null;
+    }
+
+    const newResponse =
+      response as AdServerResponse;
+
+    return {
+      ...newResponse,
+
+      mode:
+        newResponse.mode ||
+        "campaign",
+
+      ads,
+    };
+  }
+
+  /* =======================================================
+     OLD CINEPUB
+
+     {
+       status: success,
+       active: true,
+       ad: {...}
+     }
+  ======================================================= */
+
+  const legacy =
+    response as LegacyAdResponse;
+
+  if (
+    legacy.active === false ||
+    !legacy.ad
+  ) {
+    return null;
+  }
+
+  const assetUrl =
+    legacy.ad.video_url ||
+    legacy.ad.asset_url ||
+    "";
+
+  if (!assetUrl) {
+    return null;
+  }
+
+  const legacyAd:
+    LiveAd = {
+    id:
+      Number(
+        legacy.ad.id
+      ) || 0,
+
+    client:
+      legacy.ad.brand ||
+      "",
+
+    client_logo:
+      legacy.ad.logo_url ||
+      null,
+
+    name:
+      legacy.ad.title ||
+      "Publicité",
+
+    regie_type:
+      "live",
+
+    format:
+      "webm_overlay",
+
+    asset_url:
+      assetUrl,
+
+    click_url:
+      legacy.ad
+        .click_url ||
+      null,
+
+    /*
+     * L'ancienne API
+     * n'a pas de grille.
+     *
+     * On utilise le tiers
+     * inférieur complet.
+     */
+    grid: {
+      r1: 3,
+      r2: 3,
+      c1: 1,
+      c2: 3,
+    },
+
+    duration_seconds:
+      Math.max(
+        1,
+        Number(
+          legacy.ad
+            .duration_seconds
+        ) || 10
+      ),
+
+    trigger_type:
+      "time",
+
+    trigger_time:
+      Math.max(
+        0,
+        Number(
+          legacy.ad
+            .trigger_time
+        ) || 30
+      ),
+
+    audio: false,
+
+    media: "live",
+
+    device:
+      currentDevice,
+
+    scenario_id:
+      null,
+  };
+
+  return {
+    status:
+      "success",
+
+    mode:
+      "campaign",
+
+    scenario:
+      null,
+
+    ads: [
+      legacyAd,
+    ],
+  };
+}
+
+/* =========================================================
+   COMPONENT
 ========================================================= */
 
 export function LivePlayer({
@@ -418,6 +752,15 @@ export function LivePlayer({
   onNext,
   onBack,
   device,
+
+  categories = [],
+  channels = [],
+  selectedCategory,
+  selectedChannelId,
+  loadingChannels = false,
+  onSelectCategory,
+  onSelectChannel,
+  onBackToCategories,
 }: LivePlayerProps) {
   /* =======================================================
      REFS
@@ -440,6 +783,11 @@ export function LivePlayer({
 
   const engineRef =
     useRef<EngineHandle | null>(
+      null
+    );
+
+  const menuRef =
+    useRef<HTMLDivElement>(
       null
     );
 
@@ -482,21 +830,11 @@ export function LivePlayer({
       AdServerResponse | null
     >(null);
 
-  /* =======================================================
-     BASIC DATA
-  ======================================================= */
-
-  const sourcesKey =
-    sources.join("||");
-
-  const activePoster =
-    poster || channelIcon;
+  const orientationLockedRef =
+    useRef(false);
 
   /* =======================================================
-     PLAYER STATE
-
-     IMPORTANT :
-     srcIdx EST DECLARE AVANT src
+     STATE
   ======================================================= */
 
   const [
@@ -541,17 +879,6 @@ export function LivePlayer({
     setSrcIdx,
   ] = useState(0);
 
-  /* =======================================================
-     ACTIVE SOURCE
-  ======================================================= */
-
-  const src =
-    sources[srcIdx] || "";
-
-  /* =======================================================
-     AD STATE
-  ======================================================= */
-
   const [
     adPackage,
     setAdPackage,
@@ -574,6 +901,53 @@ export function LivePlayer({
     setOverlayAssetUrl,
   ] = useState("");
 
+  const [
+    fullscreenMenuOpen,
+    setFullscreenMenuOpen,
+  ] = useState(false);
+
+  const [
+    categoryMode,
+    setCategoryMode,
+  ] = useState(false);
+
+  const [
+    fallbackFullscreen,
+    setFallbackFullscreen,
+  ] = useState(false);
+
+  const [
+    orientationHint,
+    setOrientationHint,
+  ] = useState(false);
+
+  /* =======================================================
+     BASIC
+  ======================================================= */
+
+  const sourcesKey =
+    sources.join("||");
+
+  const activePoster =
+    poster ||
+    channelIcon;
+
+  const src =
+    sources[srcIdx] ||
+    "";
+
+  /* =======================================================
+     ACTIVE AD
+  ======================================================= */
+
+  const activeOverlay =
+    overlayIndex >= 0
+      ? adPackage
+          ?.ads?.[
+            overlayIndex
+          ] || null
+      : null;
+
   /* =======================================================
      SYNC REFS
   ======================================================= */
@@ -581,31 +955,26 @@ export function LivePlayer({
   useEffect(() => {
     overlayVisibleRef.current =
       overlayVisible;
-  }, [overlayVisible]);
+  }, [
+    overlayVisible,
+  ]);
 
   useEffect(() => {
     overlayIndexRef.current =
       overlayIndex;
-  }, [overlayIndex]);
+  }, [
+    overlayIndex,
+  ]);
 
   useEffect(() => {
     adPackageRef.current =
       adPackage;
-  }, [adPackage]);
+  }, [
+    adPackage,
+  ]);
 
   /* =======================================================
-     ACTIVE OVERLAY
-  ======================================================= */
-
-  const activeOverlay =
-    overlayIndex >= 0
-      ? adPackage?.ads?.[
-          overlayIndex
-        ] || null
-      : null;
-
-  /* =======================================================
-     CLEAR TIMERS
+     CLEAR ADS TIMERS
   ======================================================= */
 
   const clearAdTimers =
@@ -651,7 +1020,7 @@ export function LivePlayer({
     }, []);
 
   /* =======================================================
-     RESET WHEN ZAPPING
+     RESET ON ZAP
   ======================================================= */
 
   useEffect(() => {
@@ -665,11 +1034,15 @@ export function LivePlayer({
 
     setAdPackage(null);
 
-    setOverlayVisible(false);
+    setOverlayVisible(
+      false
+    );
 
     setOverlayIndex(-1);
 
-    setOverlayAssetUrl("");
+    setOverlayAssetUrl(
+      ""
+    );
 
     overlayVisibleRef.current =
       false;
@@ -691,7 +1064,11 @@ export function LivePlayer({
   ]);
 
   /* =======================================================
-     FETCH CINEPUB LIVE ADS
+     FETCH CINEPUB
+
+     SUPPORT :
+     - STUDIO 4 ads[]
+     - ANCIENNE API ad
   ======================================================= */
 
   useEffect(() => {
@@ -714,7 +1091,9 @@ export function LivePlayer({
           detectDevice();
 
         const separator =
-          apiUrl.includes("?")
+          apiUrl.includes(
+            "?"
+          )
             ? "&"
             : "?";
 
@@ -727,6 +1106,11 @@ export function LivePlayer({
           )}`;
 
         try {
+          console.log(
+            "[CinePub] GET",
+            endpoint
+          );
+
           const response =
             await fetch(
               endpoint,
@@ -736,59 +1120,66 @@ export function LivePlayer({
               }
             );
 
-          if (!response.ok) {
+          console.log(
+            "[CinePub] HTTP",
+            response.status
+          );
+
+          if (
+            !response.ok
+          ) {
             console.warn(
-              "CinePub API HTTP:",
+              "[CinePub] HTTP ERROR",
               response.status
             );
 
             return;
           }
 
-          const data =
-            (await response.json()) as AdServerResponse;
+          const raw:
+            unknown =
+            await response.json();
+
+          console.log(
+            "[CinePub] RESPONSE",
+            raw
+          );
 
           if (!active) {
             return;
           }
 
-          if (
-            data?.status !==
-              "success" ||
-            !Array.isArray(
-              data.ads
-            ) ||
-            data.ads.length ===
-              0
-          ) {
-            return;
-          }
-
-          /**
-           * SECURITE :
-           * LivePlayer accepte
-           * uniquement LIVE.
-           */
-          const liveAds =
-            data.ads.filter(
-              (ad) =>
-                ad.regie_type ===
-                "live"
+          const normalized =
+            normalizeAdResponse(
+              raw,
+              currentDevice
             );
 
           if (
-            !liveAds.length
+            !normalized ||
+            !normalized.ads ||
+            normalized.ads
+              .length === 0
           ) {
+            console.warn(
+              "[CinePub] aucune pub compatible",
+              raw
+            );
+
             return;
           }
 
-          setAdPackage({
-            ...data,
-            ads: liveAds,
-          });
+          console.log(
+            "[CinePub] PUB READY",
+            normalized
+          );
+
+          setAdPackage(
+            normalized
+          );
         } catch (err) {
-          console.warn(
-            "CinePub LIVE fetch error:",
+          console.error(
+            "[CinePub] FETCH ERROR",
             err
           );
         }
@@ -812,6 +1203,7 @@ export function LivePlayer({
     useCallback(
       async (
         ad: LiveAd,
+
         eventType:
           | "impression"
           | "complete"
@@ -825,6 +1217,13 @@ export function LivePlayer({
             apiUrl
           );
 
+        /*
+         * Si on utilise un
+         * proxy /api/ad sans
+         * route analytics,
+         * on ne casse jamais
+         * la pub.
+         */
         if (!eventUrl) {
           return;
         }
@@ -845,7 +1244,8 @@ export function LivePlayer({
                   "application/json",
               },
 
-              keepalive: true,
+              keepalive:
+                true,
 
               body:
                 JSON.stringify(
@@ -874,27 +1274,33 @@ export function LivePlayer({
             }
           );
         } catch {
-          /**
+          /*
            * Analytics ne doit
-           * jamais casser le Live.
+           * jamais interrompre
+           * le live.
            */
         }
       },
-      [device]
+      [
+        device,
+      ]
     );
 
   /* =======================================================
-     SHOW OVERLAY
+     SHOW AD
   ======================================================= */
 
   const showOverlay =
     useCallback(
-      (index: number) => {
+      (
+        index: number
+      ) => {
         const currentPackage =
           adPackageRef.current;
 
         const ads =
-          currentPackage?.ads ||
+          currentPackage
+            ?.ads ||
           [];
 
         const ad =
@@ -912,6 +1318,22 @@ export function LivePlayer({
             ad.asset_url,
             apiUrl
           );
+
+        if (
+          !finalAssetUrl
+        ) {
+          console.warn(
+            "[CinePub] asset vide"
+          );
+
+          return;
+        }
+
+        console.log(
+          "[CinePub] SHOW",
+          ad,
+          finalAssetUrl
+        );
 
         overlayIndexRef.current =
           index;
@@ -936,32 +1358,37 @@ export function LivePlayer({
           "impression"
         );
 
-        /**
-         * HARD RULE
-         *
-         * LIVE ADS = AUDIO OFF
+        /*
+         * HARD RULE :
+         * LIVE ADS =
+         * TOUJOURS MUETTES
          */
-        setTimeout(() => {
-          const overlay =
-            overlayVideoRef.current;
+        requestAnimationFrame(
+          () => {
+            const overlay =
+              overlayVideoRef
+                .current;
 
-          if (overlay) {
-            overlay.muted =
-              true;
+            if (overlay) {
+              overlay.muted =
+                true;
 
-            overlay.defaultMuted =
-              true;
+              overlay.defaultMuted =
+                true;
 
-            overlay.volume =
-              0;
+              overlay.volume =
+                0;
+            }
           }
-        }, 0);
+        );
       },
-      [sendAdEvent]
+      [
+        sendAdEvent,
+      ]
     );
 
   /* =======================================================
-     FINISH OVERLAY
+     FINISH AD
   ======================================================= */
 
   const finishOverlay =
@@ -977,7 +1404,8 @@ export function LivePlayer({
         adPackageRef.current;
 
       const ads =
-        currentPackage?.ads ||
+        currentPackage
+          ?.ads ||
         [];
 
       const currentIndex =
@@ -1006,7 +1434,9 @@ export function LivePlayer({
           null;
       }
 
-      if (currentAd) {
+      if (
+        currentAd
+      ) {
         sendAdEvent(
           currentAd,
           "complete"
@@ -1016,14 +1446,14 @@ export function LivePlayer({
       const nextIndex =
         currentIndex + 1;
 
-      /**
-       * SCENARIO LIVE :
-       * spot suivant
-       *
-       * le direct continue.
+      /*
+       * SCENARIO :
+       * on enchaîne les pubs.
+       * Le live continue.
        */
       if (
-        currentPackage?.mode ===
+        currentPackage
+          ?.mode ===
           "scenario" &&
         nextIndex <
           ads.length
@@ -1046,20 +1476,23 @@ export function LivePlayer({
       overlayIndexRef.current =
         -1;
 
-      setOverlayAssetUrl("");
+      setOverlayAssetUrl(
+        ""
+      );
     }, [
       sendAdEvent,
       showOverlay,
     ]);
 
   /* =======================================================
-     SCHEDULE AD PACKAGE
+     SCHEDULE AD
   ======================================================= */
 
   useEffect(() => {
     if (
       !adPackage ||
-      !adPackage.ads?.length
+      !adPackage.ads
+        ?.length
     ) {
       return;
     }
@@ -1086,22 +1519,17 @@ export function LivePlayer({
         : firstAd
             .trigger_type;
 
-    /**
-     * Manual =
-     * pas de déclenchement
-     * automatique.
-     */
     if (
       triggerType ===
       "manual"
     ) {
+      console.log(
+        "[CinePub] trigger manual"
+      );
+
       return;
     }
 
-    /**
-     * post n'a pas de sens
-     * pour un live infini.
-     */
     if (
       triggerType ===
       "post"
@@ -1142,6 +1570,12 @@ export function LivePlayer({
         : triggerSeconds *
           1000;
 
+    console.log(
+      "[CinePub] scheduled in",
+      delay,
+      "ms"
+    );
+
     overlayTriggerTimerRef.current =
       setTimeout(
         () => {
@@ -1170,7 +1604,7 @@ export function LivePlayer({
   ]);
 
   /* =======================================================
-     OVERLAY DURATION
+     AD DURATION
   ======================================================= */
 
   useEffect(() => {
@@ -1205,7 +1639,8 @@ export function LivePlayer({
         () => {
           finishOverlay();
         },
-        duration * 1000
+        duration *
+          1000
       );
 
     return () => {
@@ -1229,7 +1664,7 @@ export function LivePlayer({
   ]);
 
   /* =======================================================
-     HARD MUTE LIVE ADS
+     HARD MUTE AD
   ======================================================= */
 
   useEffect(() => {
@@ -1240,18 +1675,21 @@ export function LivePlayer({
     }
 
     const overlay =
-      overlayVideoRef.current;
+      overlayVideoRef
+        .current;
 
     if (!overlay) {
       return;
     }
 
-    overlay.muted = true;
+    overlay.muted =
+      true;
 
     overlay.defaultMuted =
       true;
 
-    overlay.volume = 0;
+    overlay.volume =
+      0;
   }, [
     overlayVisible,
     overlayAssetUrl,
@@ -1300,7 +1738,7 @@ export function LivePlayer({
     );
 
   /* =======================================================
-     ATTACH LIVE STREAM
+     ATTACH LIVE
   ======================================================= */
 
   useEffect(() => {
@@ -1319,16 +1757,21 @@ export function LivePlayer({
 
     setBuffering(true);
 
+    setError(null);
+
     (async () => {
       try {
-        engineRef.current?.destroy();
+        engineRef.current
+          ?.destroy();
 
         engineRef.current =
           await attach(
             video,
             {
               url: src,
+
               ext,
+
               isLive:
                 true,
             }
@@ -1342,12 +1785,7 @@ export function LivePlayer({
 
         try {
           await video.play();
-        } catch {
-          /**
-           * autoplay
-           * navigateur
-           */
-        }
+        } catch {}
       } catch (err) {
         if (
           !cancelled
@@ -1364,7 +1802,8 @@ export function LivePlayer({
 
     const isLastSource =
       srcIdx >=
-      sources.length - 1;
+      sources.length -
+        1;
 
     const watchdog =
       setTimeout(
@@ -1400,13 +1839,15 @@ export function LivePlayer({
       );
 
     return () => {
-      cancelled = true;
+      cancelled =
+        true;
 
       clearTimeout(
         watchdog
       );
 
-      engineRef.current?.destroy();
+      engineRef.current
+        ?.destroy();
 
       engineRef.current =
         null;
@@ -1420,7 +1861,7 @@ export function LivePlayer({
   ]);
 
   /* =======================================================
-     MAIN LIVE EVENTS
+     MAIN VIDEO EVENTS
   ======================================================= */
 
   useEffect(() => {
@@ -1516,35 +1957,12 @@ export function LivePlayer({
         onErr
       );
     };
-  }, [tryFallback]);
-
-  /* =======================================================
-     FULLSCREEN STATE
-  ======================================================= */
-
-  useEffect(() => {
-    const handler =
-      () =>
-        setFullscreen(
-          !!document
-            .fullscreenElement
-        );
-
-    document.addEventListener(
-      "fullscreenchange",
-      handler
-    );
-
-    return () =>
-      document.removeEventListener(
-        "fullscreenchange",
-        handler
-      );
-  }, []);
+  }, [
+    tryFallback,
+  ]);
 
   /* =======================================================
      PLAY / PAUSE
-     UNIQUEMENT LIVE
   ======================================================= */
 
   const togglePlay =
@@ -1570,8 +1988,7 @@ export function LivePlayer({
     }, []);
 
   /* =======================================================
-     MUTE LIVE
-     NE TOUCHE PAS A LA PUB
+     VOLUME
   ======================================================= */
 
   const toggleMute =
@@ -1590,10 +2007,6 @@ export function LivePlayer({
         video.muted
       );
     }, []);
-
-  /* =======================================================
-     VOLUME LIVE
-  ======================================================= */
 
   const changeVolume =
     useCallback(
@@ -1621,22 +2034,21 @@ export function LivePlayer({
             0;
         }
 
-        /**
-         * PUB LIVE
-         *
-         * TOUJOURS SILENCIEUSE
+        /*
+         * Pub LIVE :
+         * toujours sans son.
          */
-        const overlay =
-          overlayVideoRef.current;
+        const ad =
+          overlayVideoRef
+            .current;
 
-        if (overlay) {
-          overlay.volume =
-            0;
+        if (ad) {
+          ad.volume = 0;
 
-          overlay.muted =
+          ad.muted =
             true;
 
-          overlay.defaultMuted =
+          ad.defaultMuted =
             true;
         }
 
@@ -1653,62 +2065,7 @@ export function LivePlayer({
     );
 
   /* =======================================================
-     FULLSCREEN
-  ======================================================= */
-
-  const toggleFs =
-    useCallback(() => {
-      if (
-        document
-          .fullscreenElement
-      ) {
-        document
-          .exitFullscreen()
-          .catch(
-            () => {}
-          );
-      } else {
-        wrapRef.current
-          ?.requestFullscreen()
-          .catch(
-            () => {}
-          );
-      }
-    }, []);
-
-  /* =======================================================
-     PICTURE IN PICTURE
-  ======================================================= */
-
-  const togglePip =
-    async () => {
-      const video =
-        videoRef.current;
-
-      if (!video) {
-        return;
-      }
-
-      try {
-        if (
-          document
-            .pictureInPictureElement
-        ) {
-          await document
-            .exitPictureInPicture();
-        } else {
-          await video
-            .requestPictureInPicture();
-        }
-      } catch {
-        /**
-         * PiP non supporté
-         */
-      }
-    };
-
-  /* =======================================================
-     AUTO HIDE CONTROLS
+     CONTROLS
   ======================================================= */
 
   const showControls =
@@ -1733,7 +2090,8 @@ export function LivePlayer({
 
             if (
               video &&
-              !video.paused
+              !video.paused &&
+              !fullscreenMenuOpen
             ) {
               setControlsOn(
                 false
@@ -1742,17 +2100,293 @@ export function LivePlayer({
           },
           3000
         );
-    }, []);
+    }, [
+      fullscreenMenuOpen,
+    ]);
 
   /* =======================================================
-     KEYBOARD
+     FULLSCREEN
+  ======================================================= */
+
+  useEffect(() => {
+    const handler =
+      () => {
+        const nativeFullscreen =
+          document
+            .fullscreenElement ===
+          wrapRef.current;
+
+        const active =
+          nativeFullscreen ||
+          fallbackFullscreen;
+
+        setFullscreen(
+          active
+        );
+
+        if (!active) {
+          setFullscreenMenuOpen(
+            false
+          );
+
+          setCategoryMode(
+            false
+          );
+
+          setOrientationHint(
+            false
+          );
+
+          if (
+            orientationLockedRef
+              .current
+          ) {
+            try {
+              screen.orientation
+                ?.unlock?.();
+            } catch {}
+
+            orientationLockedRef.current =
+              false;
+          }
+        }
+      };
+
+    handler();
+
+    document.addEventListener(
+      "fullscreenchange",
+      handler
+    );
+
+    return () =>
+      document.removeEventListener(
+        "fullscreenchange",
+        handler
+      );
+  }, [
+    fallbackFullscreen,
+  ]);
+
+  useEffect(() => {
+    if (
+      !fallbackFullscreen
+    ) {
+      return;
+    }
+
+    const oldOverflow =
+      document.body.style
+        .overflow;
+
+    document.body.style.overflow =
+      "hidden";
+
+    return () => {
+      document.body.style.overflow =
+        oldOverflow;
+    };
+  }, [
+    fallbackFullscreen,
+  ]);
+
+  const toggleFs =
+    useCallback(
+      async () => {
+        const wrapper =
+          wrapRef.current;
+
+        if (!wrapper) {
+          return;
+        }
+
+        if (
+          document
+            .fullscreenElement ===
+          wrapper
+        ) {
+          try {
+            await document
+              .exitFullscreen();
+          } catch {}
+
+          return;
+        }
+
+        if (
+          fallbackFullscreen
+        ) {
+          setFallbackFullscreen(
+            false
+          );
+
+          return;
+        }
+
+        let fallback =
+          false;
+
+        try {
+          await wrapper
+            .requestFullscreen();
+        } catch {
+          fallback =
+            true;
+
+          setFallbackFullscreen(
+            true
+          );
+        }
+
+        wrapper.focus();
+
+        if (
+          (device ||
+            detectDevice()) ===
+          "mobile"
+        ) {
+          try {
+            const orientation =
+              screen.orientation as
+                | LockableOrientation
+                | undefined;
+
+            if (
+              !orientation
+                ?.lock
+            ) {
+              throw new Error();
+            }
+
+            await orientation.lock(
+              "landscape"
+            );
+
+            orientationLockedRef.current =
+              true;
+
+            setOrientationHint(
+              false
+            );
+          } catch {
+            setOrientationHint(
+              true
+            );
+          }
+        }
+
+        if (fallback) {
+          setFullscreen(
+            true
+          );
+        }
+      },
+      [
+        device,
+        fallbackFullscreen,
+      ]
+    );
+
+  /* =======================================================
+     PIP
+  ======================================================= */
+
+  const togglePip =
+    async () => {
+      const video =
+        videoRef.current;
+
+      if (!video) {
+        return;
+      }
+
+      try {
+        if (
+          document
+            .pictureInPictureElement
+        ) {
+          await document
+            .exitPictureInPicture();
+        } else {
+          await video
+            .requestPictureInPicture();
+        }
+      } catch {}
+    };
+
+  /* =======================================================
+     FULLSCREEN MENU
+  ======================================================= */
+
+  const openFullscreenMenu =
+    useCallback(() => {
+      setCategoryMode(
+        !selectedCategory
+      );
+
+      setFullscreenMenuOpen(
+        true
+      );
+
+      setControlsOn(
+        true
+      );
+    }, [
+      selectedCategory,
+    ]);
+
+  const closeFullscreenMenu =
+    useCallback(() => {
+      setFullscreenMenuOpen(
+        false
+      );
+
+      wrapRef.current
+        ?.focus();
+    }, []);
+
+  useEffect(() => {
+    if (
+      !fullscreenMenuOpen
+    ) {
+      return;
+    }
+
+    requestAnimationFrame(
+      () => {
+        const selected =
+          menuRef.current
+            ?.querySelector<HTMLButtonElement>(
+              "[aria-current='true']"
+            );
+
+        const first =
+          menuRef.current
+            ?.querySelector<HTMLButtonElement>(
+              "button:not(:disabled)"
+            );
+
+        (
+          selected ||
+          first
+        )?.focus();
+      }
+    );
+  }, [
+    fullscreenMenuOpen,
+    categoryMode,
+    channels,
+    categories,
+  ]);
+
+  /* =======================================================
+     KEYBOARD / TV REMOTE
   ======================================================= */
 
   useEffect(() => {
     const handler =
       (
-        event:
-          KeyboardEvent
+        event: KeyboardEvent
       ) => {
         if (
           [
@@ -1760,12 +2394,183 @@ export function LivePlayer({
             "TEXTAREA",
           ].includes(
             (
-              event.target as HTMLElement
+              event.target as
+                HTMLElement
             )?.tagName
           )
         ) {
           return;
         }
+
+        const back =
+          [
+            "Escape",
+            "Backspace",
+            "BrowserBack",
+            "GoBack",
+          ].includes(
+            event.key
+          ) ||
+          [
+            4,
+            461,
+            10009,
+          ].includes(
+            event.keyCode
+          );
+
+        /* =================================================
+           MENU FULLSCREEN
+        ================================================= */
+
+        if (
+          fullscreen &&
+          fullscreenMenuOpen
+        ) {
+          const buttons =
+            Array.from(
+              menuRef.current
+                ?.querySelectorAll<HTMLButtonElement>(
+                  "button:not(:disabled)"
+                ) || []
+            );
+
+          const current =
+            buttons.indexOf(
+              document
+                .activeElement as
+                HTMLButtonElement
+            );
+
+          if (back) {
+            event.preventDefault();
+
+            closeFullscreenMenu();
+
+            return;
+          }
+
+          if (
+            [
+              "ArrowUp",
+              "ArrowLeft",
+            ].includes(
+              event.key
+            )
+          ) {
+            event.preventDefault();
+
+            const next =
+              current <= 0
+                ? buttons.length -
+                  1
+                : current - 1;
+
+            buttons[next]
+              ?.focus();
+
+            buttons[next]
+              ?.scrollIntoView(
+                {
+                  block:
+                    "nearest",
+                }
+              );
+
+            return;
+          }
+
+          if (
+            [
+              "ArrowDown",
+              "ArrowRight",
+            ].includes(
+              event.key
+            )
+          ) {
+            event.preventDefault();
+
+            const next =
+              current >=
+              buttons.length - 1
+                ? 0
+                : current + 1;
+
+            buttons[next]
+              ?.focus();
+
+            buttons[next]
+              ?.scrollIntoView(
+                {
+                  block:
+                    "nearest",
+                }
+              );
+
+            return;
+          }
+
+          if (
+            [
+              "Enter",
+              " ",
+              "Select",
+              "Accept",
+            ].includes(
+              event.key
+            )
+          ) {
+            event.preventDefault();
+
+            if (
+              current >= 0
+            ) {
+              buttons[current]
+                ?.click();
+            }
+
+            return;
+          }
+
+          return;
+        }
+
+        /* =================================================
+           FULLSCREEN
+        ================================================= */
+
+        if (
+          fullscreen
+        ) {
+          if (back) {
+            event.preventDefault();
+
+            void toggleFs();
+
+            return;
+          }
+
+          if (
+            [
+              "Enter",
+              "Select",
+              "Accept",
+              "ContextMenu",
+            ].includes(
+              event.key
+            )
+          ) {
+            event.preventDefault();
+
+            openFullscreenMenu();
+
+            return;
+          }
+        }
+
+        /* =================================================
+           NORMAL PLAYER
+        ================================================= */
 
         switch (
           event.key
@@ -1809,22 +2614,12 @@ export function LivePlayer({
             break;
 
           case "f":
-            toggleFs();
+            void toggleFs();
 
             break;
 
           case "m":
             toggleMute();
-
-            break;
-
-          case "Escape":
-            if (
-              !document
-                .fullscreenElement
-            ) {
-              onBack?.();
-            }
 
             break;
         }
@@ -1834,28 +2629,33 @@ export function LivePlayer({
 
     window.addEventListener(
       "keydown",
-      handler
+      handler,
+      true
     );
 
     return () =>
       window.removeEventListener(
         "keydown",
-        handler
+        handler,
+        true
       );
   }, [
-    volume,
+    fullscreen,
+    fullscreenMenuOpen,
     hasNext,
     onNext,
-    onBack,
-    togglePlay,
+    openFullscreenMenu,
+    closeFullscreenMenu,
     toggleFs,
+    togglePlay,
     toggleMute,
     changeVolume,
     showControls,
+    volume,
   ]);
 
   /* =======================================================
-     CLICK PUB
+     AD CLICK
   ======================================================= */
 
   const handleOverlayClick =
@@ -1876,7 +2676,9 @@ export function LivePlayer({
       window.open(
         activeOverlay
           .click_url,
+
         "_blank",
+
         "noopener,noreferrer"
       );
     }, [
@@ -1899,13 +2701,37 @@ export function LivePlayer({
       overlayAssetUrl
     );
 
-  /* =======================================================
+  /* =========================================================
      UI
-  ======================================================= */
+  ========================================================= */
 
   return (
     <div
-      ref={wrapRef}
+      ref={
+        wrapRef
+      }
+      tabIndex={
+        -1
+      }
+      style={
+        fallbackFullscreen
+          ? {
+              position:
+                "fixed",
+
+              inset: 0,
+
+              width:
+                "100vw",
+
+              height:
+                "100dvh",
+
+              zIndex:
+                2147483647,
+            }
+          : undefined
+      }
       onMouseMove={
         showControls
       }
@@ -1922,31 +2748,40 @@ export function LivePlayer({
         select-none
         overflow-hidden
         bg-black
+        outline-none
         `,
-        controlsOn
+
+        controlsOn ||
+          fullscreenMenuOpen
           ? "cursor-default"
           : "cursor-none"
       )}
     >
-      {/* ==================================================
-          MAIN LIVE VIDEO
-
-          IMPORTANT :
-          JAMAIS MASQUE
-          JAMAIS PAUSE PAR LA PUB
-      ================================================== */}
+      {/* =================================================
+          LIVE VIDEO
+      ================================================= */}
 
       <video
-        ref={videoRef}
+        ref={
+          videoRef
+        }
         poster={
           activePoster
         }
         playsInline
-        onClick={
-          togglePlay
-        }
-        onDoubleClick={
-          toggleFs
+        onClick={() => {
+          if (
+            fullscreen
+          ) {
+            openFullscreenMenu();
+
+            return;
+          }
+
+          togglePlay();
+        }}
+        onDoubleClick={() =>
+          void toggleFs()
         }
         className="
           absolute
@@ -1957,9 +2792,12 @@ export function LivePlayer({
         "
       />
 
-      {/* ==================================================
-          LIVE AD OVERLAY
-      ================================================== */}
+      {/* =================================================
+          CINEPUB LIVE OVERLAY
+
+          LE LIVE RESTE VISIBLE
+          ET CONTINUE DE JOUER.
+      ================================================= */}
 
       {overlayVisible &&
         activeOverlay &&
@@ -1970,18 +2808,20 @@ export function LivePlayer({
             }
             className={cn(
               `
-              z-[15]
+              absolute
+              z-[25]
               overflow-hidden
               `,
+
               activeOverlay
                 .click_url
                 ? `
                   pointer-events-auto
                   cursor-pointer
-                  `
+                `
                 : `
                   pointer-events-none
-                  `
+                `
             )}
             onClick={
               activeOverlay
@@ -2017,10 +2857,6 @@ export function LivePlayer({
                   const adVideo =
                     event.currentTarget;
 
-                  /**
-                   * LIVE AD
-                   * AUDIO OFF
-                   */
                   adVideo.muted =
                     true;
 
@@ -2044,7 +2880,8 @@ export function LivePlayer({
 
                   if (
                     !adVideo.muted ||
-                    adVideo.volume !==
+                    adVideo
+                      .volume !==
                       0
                   ) {
                     adVideo.muted =
@@ -2057,8 +2894,14 @@ export function LivePlayer({
                       0;
                   }
                 }}
-                onEnded={() => {
-                  finishOverlay();
+                onEnded={
+                  finishOverlay
+                }
+                onError={() => {
+                  console.error(
+                    "[CinePub] asset video error:",
+                    overlayAssetUrl
+                  );
                 }}
                 className="
                   h-full
@@ -2079,6 +2922,12 @@ export function LivePlayer({
                 draggable={
                   false
                 }
+                onError={() => {
+                  console.error(
+                    "[CinePub] asset image error:",
+                    overlayAssetUrl
+                  );
+                }}
                 className="
                   h-full
                   w-full
@@ -2089,9 +2938,9 @@ export function LivePlayer({
           </div>
         )}
 
-      {/* ==================================================
+      {/* =================================================
           BUFFERING
-      ================================================== */}
+      ================================================= */}
 
       {buffering &&
         !error && (
@@ -2107,8 +2956,8 @@ export function LivePlayer({
           >
             <Loader2
               className="
-                h-11
-                w-11
+                h-10
+                w-10
                 animate-spin
                 text-[#d8ccff]
               "
@@ -2116,16 +2965,16 @@ export function LivePlayer({
           </div>
         )}
 
-      {/* ==================================================
+      {/* =================================================
           ERROR
-      ================================================== */}
+      ================================================= */}
 
       {error && (
         <div
           className="
             absolute
             inset-0
-            z-30
+            z-40
             grid
             place-items-center
             bg-[#060608]/95
@@ -2154,8 +3003,7 @@ export function LivePlayer({
                 font-semibold
               "
             >
-              Flux Live
-              interrompu
+              Flux Live interrompu
             </p>
 
             <p
@@ -2170,6 +3018,7 @@ export function LivePlayer({
 
             {onBack && (
               <button
+                type="button"
                 onClick={
                   onBack
                 }
@@ -2182,7 +3031,6 @@ export function LivePlayer({
                   px-5
                   py-2.5
                   text-sm
-                  font-medium
                   hover:bg-white/10
                 "
               >
@@ -2193,53 +3041,762 @@ export function LivePlayer({
         </div>
       )}
 
-      {/* ==================================================
-          TOP BAR
-      ================================================== */}
+      {/* =================================================
+          FULLSCREEN BUTTON CHANNELS
+      ================================================= */}
+
+      {fullscreen &&
+        !fullscreenMenuOpen && (
+          <button
+            type="button"
+            onClick={
+              openFullscreenMenu
+            }
+            className="
+              absolute
+              right-5
+              top-5
+              z-[55]
+
+              flex
+              items-center
+              gap-2
+
+              rounded-full
+
+              border
+              border-white/15
+
+              bg-black/35
+
+              px-4
+              py-2.5
+
+              text-[11px]
+              font-medium
+
+              text-white/85
+
+              backdrop-blur-2xl
+
+              transition
+
+              hover:bg-white/10
+            "
+          >
+            <Tv
+              className="
+                h-4
+                w-4
+              "
+            />
+
+            Chaînes
+          </button>
+        )}
+
+      {fullscreen &&
+        orientationHint &&
+        !fullscreenMenuOpen && (
+          <div
+            className="
+              pointer-events-none
+              absolute
+              left-5
+              top-5
+              z-[55]
+
+              rounded-xl
+
+              border
+              border-white/10
+
+              bg-black/50
+
+              px-3
+              py-2
+
+              text-[10px]
+              text-white/70
+
+              backdrop-blur-xl
+            "
+          >
+            Tournez votre appareil en paysage.
+          </div>
+        )}
+
+      {/* =================================================
+          FULLSCREEN FLOATING NAV
+      ================================================= */}
+
+      {fullscreen &&
+        fullscreenMenuOpen && (
+          <div
+            className="
+              absolute
+              inset-0
+              z-[70]
+
+              bg-black/10
+            "
+            onClick={
+              closeFullscreenMenu
+            }
+          >
+            <div
+              ref={
+                menuRef
+              }
+              role="dialog"
+              aria-modal="true"
+              onClick={(
+                event
+              ) =>
+                event.stopPropagation()
+              }
+              className="
+                absolute
+                left-4
+                top-1/2
+
+                flex
+
+                max-h-[82vh]
+
+                w-[330px]
+                max-w-[calc(100vw-32px)]
+
+                -translate-y-1/2
+
+                flex-col
+
+                overflow-hidden
+
+                rounded-[24px]
+
+                border
+                border-white/[0.12]
+
+                bg-[#08080c]/60
+
+                text-white
+
+                shadow-[0_30px_100px_rgba(0,0,0,.55)]
+
+                backdrop-blur-[30px]
+              "
+            >
+              {/* HEADER */}
+
+              <div
+                className="
+                  flex
+                  shrink-0
+
+                  items-start
+                  justify-between
+
+                  gap-3
+
+                  border-b
+                  border-white/[0.08]
+
+                  p-4
+                "
+              >
+                <div
+                  className="
+                    min-w-0
+                    flex-1
+                  "
+                >
+                  <div
+                    className="
+                      flex
+                      items-center
+                      gap-2
+                    "
+                  >
+                    <Radio
+                      className="
+                        h-3.5
+                        w-3.5
+                        text-red-400
+                      "
+                    />
+
+                    <span
+                      className="
+                        text-[8px]
+                        font-semibold
+
+                        uppercase
+                        tracking-[0.16em]
+
+                        text-white/40
+                      "
+                    >
+                      Live TV
+                    </span>
+                  </div>
+
+                  <h2
+                    className="
+                      mt-2
+                      truncate
+
+                      text-[16px]
+                      font-semibold
+                    "
+                  >
+                    {categoryMode
+                      ? "Toutes les catégories"
+                      : selectedCategory
+                          ?.category_name ||
+                        "Chaînes"}
+                  </h2>
+
+                  {!categoryMode &&
+                    selectedCategory && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          /*
+                           * Important :
+                           * on affiche les
+                           * catégories sans
+                           * couper le live.
+                           */
+                          setCategoryMode(
+                            true
+                          );
+                        }}
+                        className="
+                          mt-2
+
+                          flex
+                          items-center
+                          gap-1.5
+
+                          rounded-lg
+
+                          px-1
+                          py-1
+
+                          text-[10px]
+
+                          text-white/45
+
+                          transition
+
+                          hover:text-white
+                        "
+                      >
+                        <ArrowLeft
+                          className="
+                            h-3
+                            w-3
+                          "
+                        />
+
+                        Toutes les catégories
+                      </button>
+                    )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    closeFullscreenMenu
+                  }
+                  className="
+                    grid
+                    h-8
+                    w-8
+
+                    shrink-0
+                    place-items-center
+
+                    rounded-full
+
+                    border
+                    border-white/10
+
+                    bg-white/[0.04]
+
+                    text-white/55
+
+                    transition
+
+                    hover:bg-white/10
+                    hover:text-white
+                  "
+                >
+                  <X
+                    className="
+                      h-4
+                      w-4
+                    "
+                  />
+                </button>
+              </div>
+
+              {/* LIST */}
+
+              <div
+                className="
+                  min-h-0
+                  flex-1
+
+                  overflow-y-auto
+
+                  p-2
+
+                  [scrollbar-width:none]
+
+                  [&::-webkit-scrollbar]:hidden
+                "
+              >
+                {/* =============================================
+                    CATEGORY LIST
+                ============================================= */}
+
+                {categoryMode ? (
+                  categories.length >
+                  0 ? (
+                    categories.map(
+                      (
+                        category
+                      ) => {
+                        const active =
+                          category
+                            .category_id ===
+                          selectedCategory
+                            ?.category_id;
+
+                        return (
+                          <button
+                            type="button"
+                            key={
+                              category.category_id
+                            }
+                            aria-current={
+                              active
+                                ? "true"
+                                : undefined
+                            }
+                            onClick={() => {
+                              onSelectCategory?.(
+                                category
+                              );
+
+                              setCategoryMode(
+                                false
+                              );
+                            }}
+                            className={cn(
+                              `
+                              group
+
+                              mb-1
+
+                              flex
+                              min-h-[46px]
+                              w-full
+
+                              items-center
+                              justify-between
+
+                              rounded-[13px]
+
+                              border
+
+                              px-3
+
+                              text-left
+
+                              transition-all
+                              duration-200
+
+                              focus:outline-none
+                              focus-visible:border-[#d8ccff]/50
+                              `,
+
+                              active
+                                ? `
+                                  border-[#d8ccff]/18
+                                  bg-[#d8ccff]/[0.08]
+                                  text-white
+                                `
+                                : `
+                                  border-transparent
+                                  text-white/55
+                                  hover:bg-white/[0.055]
+                                  hover:text-white
+                                `
+                            )}
+                          >
+                            <span
+                              className="
+                                truncate
+                                text-[10px]
+                                font-medium
+                              "
+                            >
+                              {
+                                category.category_name
+                              }
+                            </span>
+
+                            <ChevronRight
+                              className="
+                                h-3.5
+                                w-3.5
+
+                                shrink-0
+
+                                text-white/18
+
+                                transition
+
+                                group-hover:translate-x-0.5
+                              "
+                            />
+                          </button>
+                        );
+                      }
+                    )
+                  ) : (
+                    <p
+                      className="
+                        p-4
+                        text-[10px]
+                        text-white/40
+                      "
+                    >
+                      Aucune catégorie disponible.
+                    </p>
+                  )
+                ) : loadingChannels ? (
+                  <div
+                    className="
+                      flex
+                      h-32
+
+                      items-center
+                      justify-center
+
+                      gap-2
+
+                      text-white/40
+                    "
+                  >
+                    <Loader2
+                      className="
+                        h-4
+                        w-4
+                        animate-spin
+                      "
+                    />
+
+                    <span
+                      className="
+                        text-[10px]
+                      "
+                    >
+                      Chargement...
+                    </span>
+                  </div>
+                ) : channels.length >
+                  0 ? (
+                  /* ===========================================
+                     CHANNEL LIST
+                  =========================================== */
+
+                  channels.map(
+                    (
+                      channel
+                    ) => {
+                      const active =
+                        channel
+                          .stream_id ===
+                        selectedChannelId;
+
+                      return (
+                        <button
+                          type="button"
+                          key={
+                            channel.stream_id
+                          }
+                          aria-current={
+                            active
+                              ? "true"
+                              : undefined
+                          }
+                          onClick={() => {
+                            onSelectChannel?.(
+                              channel
+                            );
+
+                            closeFullscreenMenu();
+                          }}
+                          className={cn(
+                            `
+                            group
+
+                            mb-1
+
+                            flex
+                            min-h-[54px]
+                            w-full
+
+                            items-center
+
+                            gap-3
+
+                            rounded-[14px]
+
+                            border
+
+                            px-2.5
+                            py-2
+
+                            text-left
+
+                            transition-all
+
+                            focus:outline-none
+                            focus-visible:border-[#d8ccff]/50
+                            `,
+
+                            active
+                              ? `
+                                border-[#d8ccff]/18
+                                bg-[#d8ccff]/[0.09]
+                              `
+                              : `
+                                border-transparent
+                                hover:bg-white/[0.055]
+                              `
+                          )}
+                        >
+                          <div
+                            className="
+                              grid
+
+                              h-9
+                              w-12
+
+                              shrink-0
+                              place-items-center
+
+                              overflow-hidden
+
+                              rounded-[10px]
+
+                              border
+                              border-white/[0.08]
+
+                              bg-white/[0.035]
+
+                              p-1
+                            "
+                          >
+                            {channel.stream_icon ? (
+                              <img
+                                src={
+                                  channel.stream_icon
+                                }
+                                alt=""
+                                className="
+                                  h-full
+                                  w-full
+
+                                  object-contain
+                                "
+                              />
+                            ) : (
+                              <Tv
+                                className="
+                                  h-4
+                                  w-4
+
+                                  text-white/20
+                                "
+                              />
+                            )}
+                          </div>
+
+                          <div
+                            className="
+                              min-w-0
+                              flex-1
+                            "
+                          >
+                            <p
+                              className="
+                                truncate
+
+                                text-[10px]
+                                font-semibold
+
+                                text-white/80
+
+                                group-hover:text-white
+                              "
+                            >
+                              {
+                                channel.name
+                              }
+                            </p>
+
+                            {active && (
+                              <div
+                                className="
+                                  mt-1
+
+                                  flex
+                                  items-center
+
+                                  gap-1
+                                "
+                              >
+                                <span
+                                  className="
+                                    h-1.5
+                                    w-1.5
+
+                                    rounded-full
+
+                                    bg-red-400
+                                  "
+                                />
+
+                                <span
+                                  className="
+                                    text-[7px]
+
+                                    uppercase
+                                    tracking-[0.1em]
+
+                                    text-red-300
+                                  "
+                                >
+                                  En direct
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    }
+                  )
+                ) : (
+                  <p
+                    className="
+                      p-4
+                      text-[10px]
+                      text-white/40
+                    "
+                  >
+                    Aucune chaîne disponible.
+                  </p>
+                )}
+              </div>
+
+              {/* FOOTER */}
+
+              <div
+                className="
+                  shrink-0
+
+                  border-t
+                  border-white/[0.07]
+
+                  px-4
+                  py-2.5
+
+                  text-[8px]
+
+                  text-white/25
+                "
+              >
+                ↑ ↓ Naviguer · OK Choisir · Retour Fermer
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* =================================================
+          TOP INFO
+      ================================================= */}
 
       <div
         className={cn(
           `
           pointer-events-none
+
           absolute
           inset-x-0
           top-0
+
           z-20
+
           flex
+
           items-start
+
           gap-3
+
           bg-gradient-to-b
-          from-black/80
+
+          from-black/75
+
           to-transparent
+
           px-5
           pb-12
           pt-5
+
           transition-opacity
+
           sm:px-8
           `,
-          controlsOn
+
+          controlsOn &&
+            !fullscreenMenuOpen
             ? "opacity-100"
             : "opacity-0"
         )}
       >
         {onBack && (
           <button
+            type="button"
             onClick={
               onBack
             }
             className="
               pointer-events-auto
+
               grid
               h-10
               w-10
+
+              shrink-0
               place-items-center
+
               rounded-full
+
               border
               border-white/10
+
               bg-black/40
+
               text-white
+
               backdrop-blur-xl
-              transition
+
               hover:bg-white/10
             "
           >
@@ -2261,15 +3818,23 @@ export function LivePlayer({
           <span
             className="
               mb-1
+
               inline-flex
+
               items-center
+
               gap-1.5
+
               rounded
+
               bg-red-600
+
               px-2
               py-0.5
+
               text-xs
               font-bold
+
               uppercase
               tracking-wide
             "
@@ -2278,7 +3843,9 @@ export function LivePlayer({
               className="
                 h-1.5
                 w-1.5
+
                 rounded-full
+
                 bg-white
               "
             />
@@ -2289,8 +3856,10 @@ export function LivePlayer({
           <h2
             className="
               truncate
+
               text-lg
               font-semibold
+
               drop-shadow
             "
           >
@@ -2299,9 +3868,9 @@ export function LivePlayer({
         </div>
       </div>
 
-      {/* ==================================================
+      {/* =================================================
           BOTTOM CONTROLS
-      ================================================== */}
+      ================================================= */}
 
       <div
         className={cn(
@@ -2309,42 +3878,59 @@ export function LivePlayer({
           absolute
           inset-x-0
           bottom-0
+
           z-20
+
           flex
+
           items-center
           justify-between
+
           bg-gradient-to-t
+
           from-black/95
           via-black/60
           to-transparent
+
           px-5
           pb-5
           pt-16
+
           transition-opacity
+
           sm:px-8
           `,
-          controlsOn
+
+          controlsOn &&
+            !fullscreenMenuOpen
             ? "opacity-100"
             : `
               pointer-events-none
               opacity-0
-              `
+            `
         )}
       >
+        {/* LEFT */}
+
         <div
           className="
             flex
+
             items-center
+
             gap-4
           "
         >
           <button
+            type="button"
             onClick={
               togglePlay
             }
             className="
               text-white
+
               transition-transform
+
               hover:scale-110
             "
           >
@@ -2367,24 +3953,26 @@ export function LivePlayer({
             )}
           </button>
 
-          {/* NEXT CHANNEL */}
-
           {hasNext && (
             <button
+              type="button"
               onClick={
                 onNext
               }
+              title="Chaîne suivante"
               className="
                 text-white/90
+
                 transition-transform
+
                 hover:scale-110
               "
-              title="Chaîne suivante"
             >
               <SkipForward
                 className="
                   h-6
                   w-6
+
                   fill-white/90
                 "
               />
@@ -2395,18 +3983,21 @@ export function LivePlayer({
 
           <div
             className="
-              ml-2
+              ml-1
+
               flex
+
               items-center
-              gap-2.5
+
+              gap-2
             "
           >
             <button
+              type="button"
               onClick={
                 toggleMute
               }
               className="
-                shrink-0
                 text-white
               "
             >
@@ -2431,9 +4022,15 @@ export function LivePlayer({
 
             <input
               type="range"
-              min={0}
-              max={1}
-              step={0.05}
+              min={
+                0
+              }
+              max={
+                1
+              }
+              step={
+                0.05
+              }
               value={
                 muted
                   ? 0
@@ -2453,39 +4050,38 @@ export function LivePlayer({
               className="
                 h-1
                 w-16
-                cursor-pointer
-                appearance-none
-                rounded-full
-                bg-white/25
-                accent-[#d8ccff]
-                sm:w-24
 
-                [&::-webkit-slider-thumb]:h-3
-                [&::-webkit-slider-thumb]:w-3
-                [&::-webkit-slider-thumb]:appearance-none
-                [&::-webkit-slider-thumb]:rounded-full
-                [&::-webkit-slider-thumb]:bg-white
+                cursor-pointer
+
+                accent-[#d8ccff]
+
+                sm:w-24
               "
             />
           </div>
         </div>
 
-        {/* RIGHT CONTROLS */}
+        {/* RIGHT */}
 
         <div
           className="
             flex
+
             items-center
+
             gap-4
           "
         >
           <button
+            type="button"
             onClick={
               togglePip
             }
             className="
               text-white/90
+
               transition-transform
+
               hover:scale-110
             "
           >
@@ -2498,12 +4094,15 @@ export function LivePlayer({
           </button>
 
           <button
-            onClick={
-              toggleFs
+            type="button"
+            onClick={() =>
+              void toggleFs()
             }
             className="
               text-white/90
+
               transition-transform
+
               hover:scale-110
             "
           >
