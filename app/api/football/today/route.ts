@@ -12,11 +12,9 @@ import {
   writeCache,
 } from "../_shared";
 
-export const runtime =
-  "nodejs";
+export const runtime = "nodejs";
 
-export const dynamic =
-  "force-dynamic";
+export const dynamic = "force-dynamic";
 
 type SourceResponse = {
   success: boolean;
@@ -27,30 +25,35 @@ async function readSource(
   url: string
 ): Promise<FootballFixture[]> {
   try {
-    const response =
-      await fetch(
-        url,
-        {
-          cache:
-            "no-store",
-        }
-      );
+    const response = await fetch(url, {
+      cache: "no-store",
+    });
 
     if (!response.ok) {
+      console.error(
+        "[football/today] source HTTP error",
+        response.status,
+        url
+      );
+
       return [];
     }
 
     const data =
-      (
-        await response.json()
-      ) as SourceResponse;
+      (await response.json()) as SourceResponse;
 
     return Array.isArray(
       data.fixtures
     )
       ? data.fixtures
       : [];
-  } catch {
+  } catch (error) {
+    console.error(
+      "[football/today] source fetch error",
+      url,
+      error
+    );
+
     return [];
   }
 }
@@ -59,15 +62,11 @@ export async function GET(
   request: NextRequest
 ) {
   const url =
-    new URL(
-      request.url
-    );
+    new URL(request.url);
 
   const date =
     safeDate(
-      url.searchParams.get(
-        "date"
-      )
+      url.searchParams.get("date")
     );
 
   const timeZone =
@@ -77,23 +76,46 @@ export async function GET(
       )
     );
 
+  /*
+   * IMPORTANT :
+   * timezone dans la clé.
+   *
+   * Sinon Istanbul, Paris,
+   * New York, etc. pourraient
+   * partager le même cache.
+   */
   const cacheKey =
-    `football:today:${date}`;
+    `football:today:${date}:${timeZone}`;
 
   const cached =
     readCache<FootballFixture[]>(
       cacheKey
     );
 
-  if (cached) {
+  /*
+   * IMPORTANT :
+   * [] est truthy en JavaScript.
+   *
+   * Donc on ne retourne le cache
+   * QUE s'il contient réellement
+   * des matchs.
+   */
+  if (
+    Array.isArray(cached) &&
+    cached.length > 0
+  ) {
     return NextResponse.json({
       success: true,
       cached: true,
+
       date,
+
       timezone:
         timeZone,
+
       count:
         cached.length,
+
       fixtures:
         cached,
     });
@@ -105,10 +127,15 @@ export async function GET(
   const query =
     new URLSearchParams({
       date,
+
       timezone:
         timeZone,
     });
 
+  /*
+   * Europe + Afrique
+   * en parallèle.
+   */
   const [
     europe,
     africa,
@@ -123,6 +150,9 @@ export async function GET(
       ),
     ]);
 
+  /*
+   * Fusion + déduplication.
+   */
   const map =
     new Map<
       string,
@@ -140,11 +170,6 @@ export async function GET(
         fixture
       );
 
-    /*
-     * Si doublon,
-     * SportSRC gagne sur
-     * ESPN pour l'Afrique.
-     */
     const existing =
       map.get(key);
 
@@ -157,6 +182,11 @@ export async function GET(
       continue;
     }
 
+    /*
+     * En cas de doublon,
+     * SportSRC gagne pour
+     * les matchs africains.
+     */
     if (
       fixture.provider ===
         "sportsrc" &&
@@ -171,33 +201,48 @@ export async function GET(
   }
 
   const fixtures =
-    [...map.values()].sort(
-      (
-        a,
-        b
-      ) =>
-        new Date(
-          a.startingAt
-        ).getTime() -
-        new Date(
-          b.startingAt
-        ).getTime()
-    );
+    [...map.values()]
+      .filter(
+        (
+          fixture
+        ): fixture is FootballFixture =>
+          !!fixture &&
+          typeof fixture.startingAt ===
+            "string"
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          new Date(
+            a.startingAt
+          ).getTime() -
+          new Date(
+            b.startingAt
+          ).getTime()
+      );
 
   /*
-   * Agrégateur :
-   * 5 minutes.
+   * IMPORTANT :
    *
-   * ESPN garde son cache
-   * 10 min.
-   * SportSRC garde son
-   * cache 15 min.
+   * On ne cache PAS
+   * un résultat vide.
+   *
+   * Sinon une erreur temporaire
+   * ESPN/SportSRC provoque
+   * "Aucun match" pendant
+   * plusieurs minutes.
    */
-  writeCache(
-    cacheKey,
-    fixtures,
-    5 * 60 * 1000
-  );
+  if (
+    fixtures.length > 0
+  ) {
+    writeCache(
+      cacheKey,
+      fixtures,
+      5 * 60 * 1000
+    );
+  }
 
   return NextResponse.json({
     success: true,
