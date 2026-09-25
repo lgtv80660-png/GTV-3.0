@@ -151,7 +151,7 @@ type FifaTeamResponse = {
 
 const CHANNEL_BATCH = 70;
 const FIFA_SESSION_TTL = 24 * 60 * 60 * 1000;
-const GUIDE_DELAY_MS = 450;
+const GUIDE_DELAY_MS = 250;
 
 /* =========================================================
    HELPERS
@@ -955,19 +955,8 @@ export default function LivePage() {
     if (channel) chooseChannel(channel);
   };
 
-  const sportMode = useMemo(
-    () => footballChannel(selectedChannel?.name),
-    [selectedChannel?.name]
-  );
-
-  /* FOOTBALL TODAY - only when a sport channel is selected */
+  /* FOOTBALL TODAY - indépendant de la chaîne sélectionnée */
   useEffect(() => {
-    if (!sportMode) {
-      setFixtures([]);
-      setSelectedFixtureId(null);
-      return;
-    }
-
     const controller = new AbortController();
     async function load() {
       setFixturesLoading(true);
@@ -1000,7 +989,7 @@ export default function LivePage() {
 
     load();
     return () => controller.abort();
-  }, [sportMode, timeZone]);
+  }, [timeZone]);
 
   const filteredFixtures = useMemo(() => {
     if (regionFilter === "europe") return fixtures.filter((fixture) => fixture.provider === "espn");
@@ -1025,13 +1014,17 @@ export default function LivePage() {
 
   useEffect(() => setSelectedTeamSide("home"), [selectedFixture?.id]);
 
-  /* beIN guide: lazy / delayed. It no longer blocks the match list. */
+  /* beIN guide: chargé une seule fois par journée dès que des matchs existent. */
   useEffect(() => {
-    setGuide([]);
-    setGuideSources([]);
     setGuideError(null);
 
-    if (!sportMode || !selectedFixture) return;
+    if (fixtures.length === 0) {
+      setGuide([]);
+      setGuideSources([]);
+      setGuideLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
 
     const timer = window.setTimeout(async () => {
@@ -1061,7 +1054,7 @@ export default function LivePage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [sportMode, selectedFixture?.id, timeZone]);
+  }, [fixtures.length, timeZone]);
 
   const allKnownChannels = useMemo(() => {
     const map = new Map<number, Channel>();
@@ -1101,6 +1094,21 @@ export default function LivePage() {
 
   const streamUrl = selectedChannel ? `/api/hls?id=${selectedChannel.stream_id}` : null;
   const mobileWatching = !!selectedChannel;
+
+  // Les données football/beIN restent préchargées en arrière-plan,
+  // mais l'interface Football ne s'affiche que dans un contexte sportif.
+  const showFootball = useMemo(() => {
+    if (!selectedChannel) return false;
+    const categoryName = selectedCategory?.category_name || "";
+    const normalizedCategory = normalize(categoryName);
+    return (
+      footballChannel(selectedChannel.name) ||
+      footballChannel(categoryName) ||
+      normalizedCategory.includes("sport") ||
+      normalizedCategory.includes("football")
+    );
+  }, [selectedChannel?.name, selectedCategory?.category_name]);
+
   const europeCount = fixtures.filter((fixture) => fixture.provider === "espn").length;
   const africaCount = fixtures.filter((fixture) => fixture.provider === "sportsrc").length;
 
@@ -1244,8 +1252,8 @@ export default function LivePage() {
           )}
 
           {/* CENTER */}
-          {selectedChannel && streamUrl ? (
-            <section className="flex min-h-0 flex-col gap-2.5 lg:col-start-3">
+          <section className="flex min-h-0 flex-col gap-2.5 lg:col-start-3">
+            {selectedChannel && streamUrl ? (
               <div className="relative shrink-0 overflow-hidden rounded-[22px] border border-violet-400/18 bg-black shadow-[0_16px_45px_rgba(0,0,0,.35)]">
                 <div className="aspect-video">
                   <LivePlayer
@@ -1267,106 +1275,114 @@ export default function LivePage() {
                   />
                 </div>
               </div>
-
-              {sportMode ? (
-                <section className="min-h-0 flex-1 overflow-hidden rounded-[22px] border border-white/[0.055] bg-[#090c15]/92">
-                  <div className="flex h-[62px] items-center justify-between border-b border-white/[0.045] px-3.5">
-                    <div>
-                      <p className="text-[11px] font-black">Football aujourd’hui</p>
-                      <p className="mt-1 flex items-center gap-1 text-[5.5px] uppercase tracking-[0.12em] text-white/18"><CalendarDays className="h-2.5 w-2.5" /> {timeZone}</p>
-                    </div>
-                    <span className="rounded-full bg-white/[0.03] px-2.5 py-1 text-[6px] text-white/30">{filteredFixtures.length}</span>
-                  </div>
-
-                  <div className="flex gap-1.5 border-b border-white/[0.04] px-3 py-2">
-                    {[
-                      { key: "all" as const, label: `Tous ${fixtures.length}` },
-                      { key: "europe" as const, label: `Europe ${europeCount}` },
-                      { key: "africa" as const, label: `Afrique ${africaCount}` },
-                    ].map((filter) => (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        onClick={() => setRegionFilter(filter.key)}
-                        className={`rounded-full border px-3 py-1.5 text-[6.5px] font-bold transition ${regionFilter === filter.key ? "border-violet-400/35 bg-violet-600 text-white" : "border-white/[0.055] bg-white/[0.02] text-white/34 hover:bg-white/[0.045]"}`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                    <span className="ml-auto hidden items-center gap-1 text-[5.5px] uppercase text-white/16 xl:flex"><BadgeCheck className="h-3 w-3 text-emerald-300/45" /> beIN</span>
-                  </div>
-
-                  <div ref={matchRef} className="h-[calc(100%-101px)] cursor-grab touch-pan-x overflow-y-auto overscroll-contain p-2 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,.26)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-violet-400/25">
-                    {fixturesLoading ? (
-                      <div className="grid h-36 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-violet-200/70" /></div>
-                    ) : fixturesError ? (
-                      <div className="grid h-36 place-items-center px-8 text-center text-[8px] text-red-300/55">{fixturesError}</div>
-                    ) : !filteredFixtures.length ? (
-                      <div className="grid h-36 place-items-center text-[8px] text-white/22">Aucun match.</div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {filteredFixtures.map((fixture) => {
-                          const active = fixture.id === selectedFixtureId;
-                          const detected = fixtureBroadcasts[fixture.id] ?? [];
-                          const launchable = detected.flatMap((entry) => entry.channels).find(Boolean) ?? null;
-
-                          return (
-                            <button
-                              key={fixture.id}
-                              type="button"
-                              onClick={() => setSelectedFixtureId(fixture.id)}
-                              className={`w-full rounded-[17px] border p-2.5 text-left transition [content-visibility:auto] [contain-intrinsic-size:110px] ${active ? "border-violet-400/48 bg-violet-500/[0.085]" : "border-white/[0.045] bg-white/[0.012] hover:bg-white/[0.03]"}`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="truncate text-[6.5px] font-bold text-white/48">{fixture.league.name}</p>
-                                  <p className="mt-0.5 text-[5px] uppercase tracking-[0.1em] text-white/16">{fixture.provider === "sportsrc" ? "Afrique" : "Europe"}</p>
-                                </div>
-                                <span className="text-[10px] font-black text-violet-100">{fixture.status.live || fixture.status.finished ? fixture.score.display || "-" : formatTime(fixture.startingAt, timeZone)}</span>
-                              </div>
-
-                              <div className="mt-2.5 grid grid-cols-[1fr_34px_1fr] items-center gap-2">
-                                <div className="flex min-w-0 items-center gap-2"><PremiumTeamLogo team={fixture.home} /><p className="truncate text-[7.5px] font-bold text-white/75">{fixture.home.name}</p></div>
-                                <span className="text-center text-[5.5px] font-black text-white/18">VS</span>
-                                <div className="flex min-w-0 items-center justify-end gap-2"><p className="truncate text-right text-[7.5px] font-bold text-white/75">{fixture.away.name}</p><PremiumTeamLogo team={fixture.away} side="away" /></div>
-                              </div>
-
-                              <div className="mt-2 flex items-center justify-between border-t border-white/[0.04] pt-2">
-                                <span className="truncate text-[5.5px] text-white/18">{detected[0]?.programme.title || (guideLoading ? "Recherche du diffuseur…" : "Diffuseur en recherche")}</span>
-                                {launchable && (
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      launchChannel(launchable);
-                                    }}
-                                    className="ml-3 flex h-7 shrink-0 items-center gap-1 rounded-full bg-violet-600 px-2.5 text-[5.5px] font-black text-white"
-                                  >
-                                    <Play className="h-2.5 w-2.5 fill-current" /> Regarder
-                                  </button>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </section>
-              ) : (
-                <div className="grid min-h-[180px] flex-1 place-items-center rounded-[22px] border border-white/[0.055] bg-[#090c15]/90 text-center">
-                  <div><Tv className="mx-auto h-7 w-7 text-white/12" /><p className="mt-3 text-[8px] text-white/32">Lecture en direct</p></div>
+            ) : (
+              <div className="grid min-h-[190px] shrink-0 place-items-center rounded-[22px] border border-white/[0.055] bg-[#090c15]/88 text-center lg:min-h-[220px]">
+                <div>
+                  <Tv className="mx-auto h-8 w-8 text-white/12" />
+                  <p className="mt-3 text-[9px] font-semibold text-white/40">Choisissez une chaîne</p>
+                  <p className="mt-1 text-[6px] text-white/18">Les matchs restent disponibles ci-dessous.</p>
                 </div>
-              )}
+              </div>
+            )}
+
+            {showFootball && (
+            <section className="min-h-[300px] flex-1 overflow-hidden rounded-[22px] border border-white/[0.055] bg-[#090c15]/92">
+              <div className="flex h-[62px] items-center justify-between border-b border-white/[0.045] px-3.5">
+                <div>
+                  <p className="text-[11px] font-black">Football aujourd’hui</p>
+                  <p className="mt-1 flex items-center gap-1 text-[5.5px] uppercase tracking-[0.12em] text-white/18"><CalendarDays className="h-2.5 w-2.5" /> {timeZone}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {guideLoading && <Loader2 className="h-3 w-3 animate-spin text-violet-200/45" />}
+                  <span className="rounded-full bg-white/[0.03] px-2.5 py-1 text-[6px] text-white/30">{filteredFixtures.length}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-1.5 border-b border-white/[0.04] px-3 py-2">
+                {[
+                  { key: "all" as const, label: `Tous ${fixtures.length}` },
+                  { key: "europe" as const, label: `Europe ${europeCount}` },
+                  { key: "africa" as const, label: `Afrique ${africaCount}` },
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    onClick={() => setRegionFilter(filter.key)}
+                    className={`rounded-full border px-3 py-1.5 text-[6.5px] font-bold transition ${regionFilter === filter.key ? "border-violet-400/35 bg-violet-600 text-white" : "border-white/[0.055] bg-white/[0.02] text-white/34 hover:bg-white/[0.045]"}`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+                <span className="ml-auto hidden items-center gap-1 text-[5.5px] uppercase text-white/16 xl:flex">
+                  <BadgeCheck className="h-3 w-3 text-emerald-300/45" />
+                  {guideLoading ? "beIN…" : guide.length ? "beIN actif" : "beIN"}
+                </span>
+              </div>
+
+              <div ref={matchRef} className="h-[calc(100%-101px)] cursor-grab touch-pan-x overflow-y-auto overscroll-contain p-2 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,.26)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-violet-400/25">
+                {fixturesLoading ? (
+                  <div className="grid h-36 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-violet-200/70" /></div>
+                ) : fixturesError ? (
+                  <div className="grid h-36 place-items-center px-8 text-center text-[8px] text-red-300/55">{fixturesError}</div>
+                ) : !filteredFixtures.length ? (
+                  <div className="grid h-36 place-items-center text-[8px] text-white/22">Aucun match.</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {filteredFixtures.map((fixture) => {
+                      const active = fixture.id === selectedFixtureId;
+                      const detected = fixtureBroadcasts[fixture.id] ?? [];
+                      const launchable = detected.flatMap((entry) => entry.channels).find(Boolean) ?? null;
+
+                      return (
+                        <button
+                          key={fixture.id}
+                          type="button"
+                          onClick={() => setSelectedFixtureId(fixture.id)}
+                          className={`w-full rounded-[17px] border p-2.5 text-left transition [content-visibility:auto] [contain-intrinsic-size:110px] ${active ? "border-violet-400/48 bg-violet-500/[0.085]" : "border-white/[0.045] bg-white/[0.012] hover:bg-white/[0.03]"}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-[6.5px] font-bold text-white/48">{fixture.league.name}</p>
+                              <p className="mt-0.5 text-[5px] uppercase tracking-[0.1em] text-white/16">{fixture.provider === "sportsrc" ? "Afrique" : "Europe"}</p>
+                            </div>
+                            <span className="text-[10px] font-black text-violet-100">{fixture.status.live || fixture.status.finished ? fixture.score.display || "-" : formatTime(fixture.startingAt, timeZone)}</span>
+                          </div>
+
+                          <div className="mt-2.5 grid grid-cols-[1fr_34px_1fr] items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2"><PremiumTeamLogo team={fixture.home} /><p className="truncate text-[7.5px] font-bold text-white/75">{fixture.home.name}</p></div>
+                            <span className="text-center text-[5.5px] font-black text-white/18">VS</span>
+                            <div className="flex min-w-0 items-center justify-end gap-2"><p className="truncate text-right text-[7.5px] font-bold text-white/75">{fixture.away.name}</p><PremiumTeamLogo team={fixture.away} side="away" /></div>
+                          </div>
+
+                          <div className="mt-2 flex items-center justify-between border-t border-white/[0.04] pt-2">
+                            <span className="truncate text-[5.5px] text-white/18">
+                              {detected[0]?.programme.title || (guideLoading ? "Recherche du diffuseur…" : guideError ? "Guide beIN indisponible" : "Diffuseur en recherche")}
+                            </span>
+                            {launchable && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  launchChannel(launchable);
+                                }}
+                                className="ml-3 flex h-7 shrink-0 items-center gap-1 rounded-full bg-violet-600 px-2.5 text-[5.5px] font-black text-white"
+                              >
+                                <Play className="h-2.5 w-2.5 fill-current" /> Regarder
+                              </button>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </section>
-          ) : (
-            <section className="hidden min-h-0 items-center justify-center rounded-[22px] border border-white/[0.055] bg-[#090c15]/88 lg:flex lg:col-start-3">
-              <div className="text-center"><Tv className="mx-auto h-8 w-8 text-white/12" /><p className="mt-3 text-[9px] text-white/35">Choisissez une chaîne</p></div>
-            </section>
-          )}
+            )}
+          </section>
 
           {/* RIGHT PANEL */}
-          {sportMode && selectedFixture && (
+          {showFootball && selectedFixture && (
             <aside className="mt-2.5 min-h-[520px] overflow-hidden rounded-[22px] border border-white/[0.055] bg-[#090c15]/94 lg:col-start-4 lg:mt-0 lg:min-h-0">
               <div ref={detailRef} className="h-full cursor-grab touch-pan-x overflow-y-auto overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,.22)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-violet-400/20">
                 <div className="border-b border-white/[0.045] p-3.5">
