@@ -12,28 +12,53 @@ import {
   writeCache,
 } from "../_shared";
 
+import {
+  GET as getEurope,
+} from "../europe/route";
+
+import {
+  GET as getAfrica,
+} from "../africa/route";
+
 export const runtime = "nodejs";
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 type SourceResponse = {
   success: boolean;
   fixtures?: FootballFixture[];
+  error?: string;
 };
 
-async function readSource(
-  url: string
+async function callSource(
+  handler: (
+    request: NextRequest
+  ) =>
+    | Promise<Response>
+    | Response,
+
+  requestUrl: string
 ): Promise<FootballFixture[]> {
   try {
-    const response = await fetch(url, {
-      cache: "no-store",
-    });
+    const request =
+      new NextRequest(
+        requestUrl,
+        {
+          method: "GET",
+        }
+      );
+
+    const response =
+      await handler(
+        request
+      );
 
     if (!response.ok) {
       console.error(
-        "[football/today] source HTTP error",
+        "[football/today] source error:",
         response.status,
-        url
+        requestUrl
       );
 
       return [];
@@ -42,15 +67,26 @@ async function readSource(
     const data =
       (await response.json()) as SourceResponse;
 
-    return Array.isArray(
-      data.fixtures
-    )
-      ? data.fixtures
-      : [];
+    if (
+      !data.success ||
+      !Array.isArray(
+        data.fixtures
+      )
+    ) {
+      console.error(
+        "[football/today] invalid source response:",
+        requestUrl,
+        data.error
+      );
+
+      return [];
+    }
+
+    return data.fixtures;
   } catch (error) {
     console.error(
-      "[football/today] source fetch error",
-      url,
+      "[football/today] source exception:",
+      requestUrl,
       error
     );
 
@@ -62,11 +98,15 @@ export async function GET(
   request: NextRequest
 ) {
   const url =
-    new URL(request.url);
+    new URL(
+      request.url
+    );
 
   const date =
     safeDate(
-      url.searchParams.get("date")
+      url.searchParams.get(
+        "date"
+      )
     );
 
   const timeZone =
@@ -77,41 +117,42 @@ export async function GET(
     );
 
   /*
-   * IMPORTANT :
-   * timezone dans la clé.
-   *
-   * Sinon Istanbul, Paris,
-   * New York, etc. pourraient
-   * partager le même cache.
+   * Cache séparé par
+   * date + timezone.
    */
   const cacheKey =
     `football:today:${date}:${timeZone}`;
 
   const cached =
-    readCache<FootballFixture[]>(
+    readCache<
+      FootballFixture[]
+    >(
       cacheKey
     );
 
   /*
-   * IMPORTANT :
-   * [] est truthy en JavaScript.
-   *
-   * Donc on ne retourne le cache
-   * QUE s'il contient réellement
-   * des matchs.
+   * Ne jamais considérer
+   * [] comme un cache valide.
    */
   if (
-    Array.isArray(cached) &&
+    Array.isArray(
+      cached
+    ) &&
     cached.length > 0
   ) {
     return NextResponse.json({
       success: true,
+
       cached: true,
 
       date,
 
       timezone:
         timeZone,
+
+      sources: {
+        cached: true,
+      },
 
       count:
         cached.length,
@@ -121,9 +162,17 @@ export async function GET(
     });
   }
 
-  const origin =
-    url.origin;
-
+  /*
+   * On construit simplement
+   * des URLs pour que les
+   * handlers Europe/Afrique
+   * puissent lire leurs
+   * searchParams.
+   *
+   * IL N'Y A PLUS DE FETCH
+   * HTTP VERS NOTRE PROPRE
+   * DOMAINE.
+   */
   const query =
     new URLSearchParams({
       date,
@@ -132,26 +181,38 @@ export async function GET(
         timeZone,
     });
 
+  const europeUrl =
+    `${url.origin}` +
+    `/api/football/europe?` +
+    query.toString();
+
+  const africaUrl =
+    `${url.origin}` +
+    `/api/football/africa?` +
+    query.toString();
+
   /*
-   * Europe + Afrique
-   * en parallèle.
+   * Appels internes directs
+   * des route handlers.
    */
   const [
     europe,
     africa,
   ] =
     await Promise.all([
-      readSource(
-        `${origin}/api/football/europe?${query.toString()}`
+      callSource(
+        getEurope,
+        europeUrl
       ),
 
-      readSource(
-        `${origin}/api/football/africa?${query.toString()}`
+      callSource(
+        getAfrica,
+        africaUrl
       ),
     ]);
 
   /*
-   * Fusion + déduplication.
+   * Fusion Europe + Afrique.
    */
   const map =
     new Map<
@@ -171,7 +232,9 @@ export async function GET(
       );
 
     const existing =
-      map.get(key);
+      map.get(
+        key
+      );
 
     if (!existing) {
       map.set(
@@ -183,9 +246,10 @@ export async function GET(
     }
 
     /*
-     * En cas de doublon,
-     * SportSRC gagne pour
-     * les matchs africains.
+     * Si ESPN + SportSRC
+     * donnent le même match,
+     * SportSRC est prioritaire
+     * pour l'Afrique.
      */
     if (
       fixture.provider ===
@@ -206,9 +270,9 @@ export async function GET(
         (
           fixture
         ): fixture is FootballFixture =>
-          !!fixture &&
-          typeof fixture.startingAt ===
-            "string"
+          Boolean(
+            fixture?.startingAt
+          )
       )
       .sort(
         (
@@ -225,22 +289,20 @@ export async function GET(
 
   /*
    * IMPORTANT :
-   *
-   * On ne cache PAS
-   * un résultat vide.
-   *
-   * Sinon une erreur temporaire
-   * ESPN/SportSRC provoque
-   * "Aucun match" pendant
-   * plusieurs minutes.
+   * ne pas mettre un résultat
+   * vide en cache.
    */
   if (
     fixtures.length > 0
   ) {
     writeCache(
       cacheKey,
+
       fixtures,
-      5 * 60 * 1000
+
+      5 *
+        60 *
+        1000
     );
   }
 
