@@ -1,65 +1,20 @@
-import { NextResponse } from "next/server";
-
-const XTREAM_HOST = process.env.XTREAM_SERVER_URL || "https://gmztv.vercel.app";
-
-export async function POST(req: Request) {
-  try {
-    const { username, password } = await req.json();
-
-    if (!username || !password) {
-      return NextResponse.json(
-        { error: "Veuillez saisir votre identifiant et mot de passe" },
-        { status: 400 }
-      );
-    }
-
-    const cleanUrl = XTREAM_HOST.replace(/\/+$/, "");
-
-    // Vérification auprès de l'API IPTV
-    const testRes = await fetch(
-      `${cleanUrl}/player_api.php?username=${encodeURIComponent(
-        username
-      )}&password=${encodeURIComponent(password)}`
-    );
-
-    if (!testRes.ok) {
-      return NextResponse.json(
-        { error: "Impossible de contacter le serveur IPTV" },
-        { status: 500 }
-      );
-    }
-
-    const data = await testRes.json();
-
-    if (!data.user_info || data.user_info.auth === 0) {
-      return NextResponse.json(
-        { error: "Identifiant ou mot de passe incorrect" },
-        { status: 401 }
-      );
-    }
-
-    // Création du cookie sécurisé gtv_session
-    const response = NextResponse.json({ success: true, user: data.user_info });
-
-    const sessionData = JSON.stringify({
-      serverUrl: cleanUrl,
-      username,
-      password,
-    });
-
-    response.cookies.set("gtv_session", sessionData, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30, // 30 jours
-    });
-
-    return response;
-  } catch (err) {
-    return NextResponse.json(
-      { error: "Erreur de connexion au serveur" },
-      { status: 500 }
-    );
-  }
+import { NextRequest } from "next/server";
+import * as gateway from "../[...path]/route";
+import { attachAndroidIdentity, captureAndroidRevocation, scheduleAndroidRevocation } from "@/lib/android-session";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+const context = () => ({ params: Promise.resolve({ path: ["login"] }) });
+export async function POST(req: NextRequest) {
+  const oldSession = await captureAndroidRevocation();
+  // The existing gateway still forwards the exact request to the existing Railway login.
+  const response = await gateway.POST(req, context());
+  const loggedIn = response.ok && Boolean(response.cookies.get("gtv_session")?.value);
+  if (loggedIn) { attachAndroidIdentity(response); scheduleAndroidRevocation(oldSession); }
+  return response;
 }
+export const GET = (req: NextRequest) => gateway.GET(req, context());
+export const PUT = (req: NextRequest) => gateway.PUT(req, context());
+export const PATCH = (req: NextRequest) => gateway.PATCH(req, context());
+export const DELETE = (req: NextRequest) => gateway.DELETE(req, context());
+export const HEAD = (req: NextRequest) => gateway.HEAD(req, context());
+export const OPTIONS = (req: NextRequest) => gateway.OPTIONS(req, context());

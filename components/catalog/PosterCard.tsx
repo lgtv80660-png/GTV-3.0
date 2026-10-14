@@ -72,6 +72,7 @@ export const PosterCard: React.FC<PosterCardProps> = ({ item, href, className = 
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110 pointer-events-none"
             onError={() => setImageError(true)}
             loading="lazy"
+      decoding="async"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-zinc-500 font-bold text-xs select-none">

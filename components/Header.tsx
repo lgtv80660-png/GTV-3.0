@@ -18,18 +18,13 @@ export function Header() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
   useEffect(() => {
-    const creds = localStorage.getItem("gtv_xtream_credentials");
-    if (creds) {
-      try {
-        const parsed = JSON.parse(creds);
-        setUserInfo(parsed.userInfo);
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    const controller=new AbortController();
+    fetch('/api/account',{cache:'no-store',signal:controller.signal}).then(r=>r.ok?r.json():null).then(data=>{if(data?.ok)setUserInfo({status:data.status,exp_date:data.expDate,active_cons:data.activeConnections,max_connections:data.maxConnections});}).catch(()=>{});
+    return ()=>controller.abort();
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try{const r=await fetch('/api/logout',{method:'POST'});if(!r.ok)return;}catch{return;}
     localStorage.removeItem("gtv_xtream_credentials");
     setIsOpen(false);
     router.push("/login");
@@ -73,7 +68,7 @@ export function Header() {
           <div className="space-y-3 text-sm mb-6">
             <div className="flex justify-between items-center">
               <span className="text-zinc-400">Utilisateur</span>
-              <span className="font-semibold text-white">{userInfo?.username || "Non connecté"}</span>
+              <span className="font-semibold text-white">{userInfo ? "Compte GTV" : "Non connecté"}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-zinc-400">Statut</span>

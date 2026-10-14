@@ -18,9 +18,9 @@ function now() {
   return Date.now();
 }
 
-export function readLiveCache<T>(key: string): T | null {
+export function readLiveCache<T>(key: string, options: { allowStale?: boolean } = {}): T | null {
   const mem = memory.get(key);
-  if (mem && mem.expiresAt > now()) return mem.value as T;
+  if (mem && (options.allowStale || mem.expiresAt > now())) return mem.value as T;
 
   if (typeof window === "undefined") return null;
 
@@ -29,7 +29,7 @@ export function readLiveCache<T>(key: string): T | null {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as CacheEnvelope<T>;
-    if (!parsed?.expiresAt || parsed.expiresAt <= now()) {
+    if (!parsed?.expiresAt || (!options.allowStale && parsed.expiresAt <= now())) {
       sessionStorage.removeItem(`${PREFIX}${key}`);
       return null;
     }

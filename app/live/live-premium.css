@@ -1,0 +1,5951 @@
+/* =========================================================
+   GTV 3.0 — LIVE TV
+   OBSIDIAN / LIQUID GLASS / PLATINUM VIOLET
+
+   DESKTOP
+   MOBILE LANDSCAPE
+   PREMIUM PORTRAIT
+
+   Architecture mobile :
+   NORMAL : Browser | Player
+   SPORT  : Browser | Player | Sport
+   ========================================================= */
+
+
+/* =========================================================
+   ROOT
+   ========================================================= */
+
+.live-premium {
+  --live-bg: #05060b;
+  --live-bg-soft: #090b12;
+
+  --live-panel: rgba(10, 11, 18, 0.94);
+  --live-panel-soft: rgba(17, 18, 28, 0.86);
+
+  --live-border: rgba(255, 255, 255, 0.09);
+  --live-border-strong: rgba(255, 255, 255, 0.15);
+
+  --live-violet: #9d7cff;
+  --live-violet-soft: #c0adff;
+  --live-violet-deep: #6844d9;
+
+  --live-text: #f7f7fb;
+  --live-text-soft: #d6d5df;
+  --live-muted: #92919e;
+
+  --live-live: #ff2638;
+
+  --live-radius: 18px;
+  --live-radius-sm: 13px;
+
+  box-sizing: border-box;
+
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+
+  padding: clamp(12px, 1.8vw, 26px);
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  color: var(--live-text);
+
+  color-scheme: dark;
+
+  font-size: 14px;
+
+  background:
+    radial-gradient(
+      circle at 72% -10%,
+      rgba(112, 79, 203, 0.15),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 8% 10%,
+      rgba(56, 48, 107, 0.12),
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      #07080d 0%,
+      #05060a 100%
+    );
+}
+
+
+.live-premium *,
+.live-premium *::before,
+.live-premium *::after {
+  box-sizing: border-box;
+}
+
+
+.live-premium button,
+.live-premium input {
+  font: inherit;
+}
+
+
+.live-premium button {
+  cursor: pointer;
+}
+
+
+.live-premium button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+
+.live-premium h1,
+.live-premium h2,
+.live-premium h3,
+.live-premium p {
+  margin: 0;
+}
+
+
+.live-premium button:focus-visible,
+.live-premium input:focus-visible,
+.live-premium [tabindex]:focus-visible {
+  outline: 2px solid var(--live-violet);
+  outline-offset: 2px;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+.live-premium * {
+  scrollbar-width: thin;
+  scrollbar-color:
+    rgba(157, 124, 255, 0.38)
+    transparent;
+}
+
+
+.live-premium *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+
+.live-premium *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+.live-premium *::-webkit-scrollbar-thumb {
+  border-radius: 100px;
+
+  background:
+    rgba(157, 124, 255, 0.34);
+}
+
+
+/* =========================================================
+   GENERIC
+   ========================================================= */
+
+.live-premium .live-eyebrow {
+  color: var(--live-muted);
+
+  font-size: 9px;
+  font-weight: 700;
+
+  line-height: 1.4;
+
+  letter-spacing: 0.11em;
+
+  text-transform: uppercase;
+}
+
+
+.live-count {
+  color: var(--live-muted);
+
+  font-size: 10px;
+  font-weight: 500;
+
+  white-space: nowrap;
+}
+
+
+.live-spin {
+  animation:
+    live-spin
+    1s
+    linear
+    infinite;
+}
+
+
+@keyframes live-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   DESKTOP HEADER
+   ========================================================= */
+
+.live-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  width: 100%;
+  max-width: 1800px;
+
+  margin:
+    0 auto
+    18px;
+}
+
+
+.live-heading-title {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  min-width: 0;
+}
+
+
+.live-heading-icon {
+  display: grid;
+  place-items: center;
+
+  width: 46px;
+  height: 46px;
+
+  flex: 0 0 46px;
+
+  border:
+    1px solid
+    rgba(157, 124, 255, 0.26);
+
+  border-radius: 15px;
+
+  color: var(--live-violet-soft);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(157, 124, 255, 0.13),
+      rgba(157, 124, 255, 0.035)
+    );
+
+  box-shadow:
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.05);
+}
+
+
+.live-heading h1 {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  margin-top: 2px;
+
+  font-size:
+    clamp(
+      22px,
+      2.2vw,
+      30px
+    );
+
+  font-weight: 760;
+
+  letter-spacing: -0.04em;
+}
+
+
+/* =========================================================
+   LIVE BADGE
+   RED ONLY FOR LIVE
+   ========================================================= */
+
+.live-on-air {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 5px;
+
+  flex-shrink: 0;
+
+  padding: 5px 7px;
+
+  border:
+    1px solid
+    rgba(255, 38, 56, 0.34);
+
+  border-radius: 6px;
+
+  color: #ffffff;
+
+  background:
+    rgba(255, 38, 56, 0.9);
+
+  box-shadow:
+    0 5px 16px
+    rgba(255, 38, 56, 0.17);
+
+  font-size: 9px;
+  font-weight: 800;
+
+  line-height: 1;
+
+  letter-spacing: 0.03em;
+}
+
+
+.live-on-air > span {
+  width: 5px;
+  height: 5px;
+
+  flex: 0 0 5px;
+
+  border-radius: 50%;
+
+  background: #ffffff;
+}
+
+
+/* =========================================================
+   REFRESH
+   ========================================================= */
+
+.live-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  min-height: 42px;
+
+  padding:
+    0 14px;
+
+  border:
+    1px solid
+    var(--live-border);
+
+  border-radius: 999px;
+
+  color: var(--live-text-soft);
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+
+.live-refresh:hover {
+  color: #ffffff;
+
+  border-color:
+    rgba(157, 124, 255, 0.45);
+
+  background:
+    rgba(157, 124, 255, 0.08);
+}
+
+
+/* =========================================================
+   SURFACE
+   ========================================================= */
+
+.live-surface {
+  min-width: 0;
+  min-height: 0;
+
+  border:
+    1px solid
+    var(--live-border);
+
+  border-radius:
+    var(--live-radius);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(15, 16, 25, 0.95),
+      rgba(7, 8, 14, 0.97)
+    );
+
+  box-shadow:
+    0 18px 50px
+    rgba(0, 0, 0, 0.25),
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.025);
+
+  backdrop-filter:
+    blur(20px);
+
+  -webkit-backdrop-filter:
+    blur(20px);
+}
+
+
+/* =========================================================
+   MAIN LAYOUT — DESKTOP
+   ========================================================= */
+
+.live-layout {
+  display: grid;
+
+  grid-template-columns:
+    clamp(220px, 18vw, 270px)
+    minmax(0, 1fr);
+
+  grid-template-areas:
+    "browser stage";
+
+  align-items: stretch;
+
+  gap: 14px;
+
+  width: 100%;
+  max-width: 1800px;
+
+  margin: 0 auto;
+}
+
+
+/* =========================================================
+   DESKTOP + SPORT
+   ========================================================= */
+
+.live-layout.has-sport {
+  grid-template-columns:
+    clamp(205px, 16vw, 250px)
+    minmax(420px, 1fr)
+    clamp(300px, 25vw, 370px);
+
+  grid-template-areas:
+    "browser stage sport";
+}
+
+
+/* =========================================================
+   BROWSER
+   CATÉGORIES <-> CHAÎNES
+   ========================================================= */
+
+.live-browser {
+  grid-area: browser;
+
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   BROWSER TOP
+   ========================================================= */
+
+.live-browser-topbar {
+  position: relative;
+
+  z-index: 3;
+
+  flex: 0 0 auto;
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.055);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(18, 19, 29, 0.97),
+      rgba(10, 11, 18, 0.95)
+    );
+}
+
+
+/* =========================================================
+   TOPBAR MAIN
+   ========================================================= */
+
+.live-browser-topbar-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  min-height: 52px;
+
+  padding:
+    7px 8px
+    6px 10px;
+}
+
+
+/* =========================================================
+   BROWSER TITLE
+   ========================================================= */
+
+.live-browser-title {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  min-width: 0;
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 720;
+
+  letter-spacing: -0.02em;
+}
+
+
+.live-browser-title svg {
+  flex-shrink: 0;
+
+  color:
+    var(--live-violet-soft);
+}
+
+
+/* =========================================================
+   BACK TO CATEGORIES
+   ========================================================= */
+
+.live-browser-back {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 6px;
+
+  min-width: 0;
+  min-height: 38px;
+
+  padding:
+    0 9px 0 6px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+
+  border-radius: 10px;
+
+  color: #f5f4fa;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  font-size: 13px;
+  font-weight: 680;
+
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+
+.live-browser-back:hover {
+  border-color:
+    rgba(157, 124, 255, 0.32);
+
+  background:
+    rgba(157, 124, 255, 0.08);
+}
+
+
+.live-browser-back span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   SEARCH TOGGLE
+   ========================================================= */
+
+.live-browser-search-toggle {
+  display: grid;
+  place-items: center;
+
+  width: 38px;
+  height: 38px;
+
+  flex: 0 0 38px;
+
+  padding: 0;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+
+  border-radius: 11px;
+
+  color: #d9d7e2;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+
+.live-browser-search-toggle:hover,
+.live-browser-search-toggle.is-active {
+  color: #ffffff;
+
+  border-color:
+    rgba(157, 124, 255, 0.48);
+
+  background:
+    rgba(157, 124, 255, 0.11);
+}
+
+
+/* =========================================================
+   BROWSER CONTEXT
+   ========================================================= */
+
+.live-browser-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  min-height: 45px;
+
+  padding:
+    4px 11px 8px;
+}
+
+
+.live-browser-context-copy {
+  display: flex;
+  flex-direction: column;
+
+  gap: 1px;
+
+  min-width: 0;
+}
+
+
+.live-browser-context-label {
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1.2;
+
+  letter-spacing: 0.09em;
+
+  text-transform: uppercase;
+}
+
+
+.live-browser-context-copy strong {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color:
+    var(--live-text-soft);
+
+  font-size: 11px;
+  font-weight: 620;
+
+  line-height: 1.35;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+
+.live-browser-total {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 25px;
+  height: 22px;
+
+  flex-shrink: 0;
+
+  padding:
+    0 6px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 999px;
+
+  color:
+    var(--live-muted);
+
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  font-size: 9px;
+  font-weight: 650;
+}
+
+
+/* =========================================================
+   SEARCH PANEL
+   ========================================================= */
+
+.live-browser-search-panel {
+  padding:
+    0 9px 9px;
+}
+
+
+.live-browser-search {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  min-height: 39px;
+
+  padding:
+    0 9px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.09);
+
+  border-radius: 10px;
+
+  color:
+    var(--live-muted);
+
+  background:
+    rgba(0, 0, 0, 0.24);
+
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+
+.live-browser-search:focus-within {
+  border-color:
+    rgba(157, 124, 255, 0.5);
+
+  background:
+    rgba(157, 124, 255, 0.045);
+}
+
+
+.live-browser-search > svg {
+  flex-shrink: 0;
+}
+
+
+.live-browser-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 37px;
+
+  padding: 0;
+
+  border: 0;
+  outline: 0;
+
+  color: #ffffff;
+
+  background: transparent;
+
+  font-size: 12px;
+}
+
+
+.live-browser-search input::placeholder {
+  color:
+    #777784;
+}
+
+
+.live-browser-search-clear {
+  display: grid;
+  place-items: center;
+
+  width: 26px;
+  height: 26px;
+
+  flex: 0 0 26px;
+
+  padding: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  color:
+    var(--live-muted);
+
+  background:
+    rgba(255, 255, 255, 0.055);
+}
+
+
+/* =========================================================
+   BROWSER SCROLL
+   ========================================================= */
+
+.live-browser-scroll {
+  flex: 1 1 auto;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior:
+    contain;
+
+  -webkit-overflow-scrolling:
+    touch;
+}
+
+
+/* =========================================================
+   CATEGORIES LIST
+   ========================================================= */
+
+.live-category-list {
+  padding:
+    7px 7px
+    10px;
+}
+
+
+/* =========================================================
+   CATEGORY ITEM
+   ========================================================= */
+
+.live-category {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  width: 100%;
+  min-width: 0;
+
+  min-height: 48px;
+
+  margin-bottom: 4px;
+
+  padding:
+    6px 7px;
+
+  border:
+    1px solid
+    transparent;
+
+  border-radius: 11px;
+
+  color:
+    #cbc9d4;
+
+  background:
+    transparent;
+
+  text-align: left;
+
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+
+.live-category:hover {
+  color: #ffffff;
+
+  border-color:
+    rgba(255, 255, 255, 0.08);
+
+  background:
+    rgba(255, 255, 255, 0.045);
+}
+
+
+.live-category.is-active {
+  color: #ffffff;
+
+  border-color:
+    rgba(157, 124, 255, 0.52);
+
+  background:
+    linear-gradient(
+      105deg,
+      rgba(157, 124, 255, 0.18),
+      rgba(157, 124, 255, 0.055)
+    );
+
+  box-shadow:
+    inset 3px 0 0
+    var(--live-violet);
+}
+
+
+/* =========================================================
+   CATEGORY ICON
+   ========================================================= */
+
+.live-category-icon {
+  display: grid;
+  place-items: center;
+
+  width: 31px;
+  height: 31px;
+
+  flex: 0 0 31px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 9px;
+
+  color:
+    var(--live-violet-soft);
+
+  background:
+    rgba(255, 255, 255, 0.035);
+}
+
+
+.live-category.is-active
+.live-category-icon {
+  border-color:
+    rgba(157, 124, 255, 0.34);
+
+  background:
+    rgba(157, 124, 255, 0.13);
+}
+
+
+/* =========================================================
+   CATEGORY COPY
+   ========================================================= */
+
+.live-category-copy {
+  flex: 1;
+
+  min-width: 0;
+}
+
+
+.live-category-copy strong {
+  display: block;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  color: inherit;
+
+  font-size: 11.5px;
+  font-weight: 620;
+
+  line-height: 1.35;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+
+.live-category-chevron {
+  flex-shrink: 0;
+
+  color:
+    #666572;
+}
+
+
+/* =========================================================
+   ERRORS
+   ========================================================= */
+
+.live-error {
+  margin:
+    0 8px 8px;
+
+  padding:
+    8px 9px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+
+  border-radius: 9px;
+
+  color:
+    #d6d3df;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  font-size: 10px;
+
+  line-height: 1.45;
+}
+
+
+.live-error button {
+  min-height: 30px;
+
+  margin-left: 4px;
+
+  padding: 0;
+
+  border: 0;
+
+  color:
+    var(--live-violet-soft);
+
+  background:
+    transparent;
+
+  text-decoration:
+    underline;
+}
+
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.live-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 9px;
+
+  min-height: 140px;
+
+  padding: 18px 12px;
+
+  color:
+    var(--live-muted);
+
+  text-align: center;
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+
+.live-empty svg {
+  color:
+    var(--live-violet-soft);
+}
+
+/* =========================================================
+   CHANNEL LIST
+   ========================================================= */
+
+.live-channel-list {
+  padding:
+    7px 7px
+    10px;
+}
+
+
+.live-channel-grid {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr);
+
+  gap: 5px;
+}
+
+
+/* =========================================================
+   CHANNEL ROW
+   ========================================================= */
+
+.live-channel {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  width: 100%;
+  min-width: 0;
+
+  min-height: 58px;
+
+  padding:
+    7px 8px;
+
+  border:
+    1px solid
+    transparent;
+
+  border-radius: 11px;
+
+  color:
+    var(--live-text-soft);
+
+  background:
+    transparent;
+
+  text-align: left;
+
+  content-visibility:
+    auto;
+
+  contain-intrinsic-size:
+    auto 58px;
+
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+
+.live-channel:hover {
+  color: #ffffff;
+
+  border-color:
+    rgba(255, 255, 255, 0.08);
+
+  background:
+    rgba(255, 255, 255, 0.045);
+}
+
+
+.live-channel.is-active {
+  color: #ffffff;
+
+  border-color:
+    rgba(157, 124, 255, 0.48);
+
+  background:
+    linear-gradient(
+      105deg,
+      rgba(157, 124, 255, 0.17),
+      rgba(157, 124, 255, 0.045)
+    );
+
+  box-shadow:
+    inset 3px 0 0
+    var(--live-violet);
+}
+
+
+/* =========================================================
+   CHANNEL LOGO
+   ========================================================= */
+
+.live-channel-logo {
+  display: grid;
+  place-items: center;
+
+  width: 46px;
+  height: 38px;
+
+  flex:
+    0 0 46px;
+
+  padding: 4px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 9px;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+}
+
+
+.live-channel-logo img {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit:
+    contain;
+}
+
+
+/* =========================================================
+   CHANNEL COPY
+   ========================================================= */
+
+.live-channel-copy {
+  flex: 1;
+
+  min-width: 0;
+}
+
+
+.live-channel-copy strong {
+  display: -webkit-box;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  color: inherit;
+
+  font-size: 11.5px;
+  font-weight: 620;
+
+  line-height: 1.35;
+
+  overflow-wrap:
+    anywhere;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+    line-clamp: 2;
+}
+
+
+.live-channel-copy small {
+  display: block;
+
+  margin-top: 3px;
+
+  overflow: hidden;
+
+  color:
+    var(--live-muted);
+
+  font-size: 9px;
+
+  line-height: 1.2;
+
+  text-overflow:
+    ellipsis;
+
+  white-space: nowrap;
+}
+
+
+.live-channel.is-active
+.live-channel-copy small {
+  color:
+    var(--live-violet-soft);
+}
+
+
+/* =========================================================
+   LOAD MORE
+   ========================================================= */
+
+.live-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  width: 100%;
+
+  min-height: 40px;
+
+  margin-top: 7px;
+
+  padding:
+    0 10px;
+
+  border:
+    1px solid
+    rgba(157, 124, 255, 0.2);
+
+  border-radius: 10px;
+
+  color:
+    var(--live-violet-soft);
+
+  background:
+    rgba(157, 124, 255, 0.055);
+
+  font-size: 10px;
+  font-weight: 650;
+}
+
+
+.live-more small {
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   STAGE
+   ========================================================= */
+
+.live-stage {
+  grid-area: stage;
+
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   PLAYER FRAME
+   ========================================================= */
+
+.live-player-frame {
+  position: relative;
+
+  width: 100%;
+  min-width: 0;
+
+  aspect-ratio:
+    16 / 9;
+
+  overflow: hidden;
+
+  background: #000000;
+}
+
+
+.live-player-frame > * {
+  width: 100%;
+  height: 100%;
+
+  min-width: 0;
+  max-width: 100%;
+}
+
+
+/* =========================================================
+   PLAYER LOADING
+   ========================================================= */
+
+.live-player-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 11px;
+
+  padding: 20px;
+
+  color:
+    var(--live-muted);
+
+  background:
+    #000000;
+
+  text-align: center;
+
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   PLAYER PLACEHOLDER
+   ========================================================= */
+
+.live-player-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  padding: 24px;
+
+  color:
+    var(--live-muted);
+
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      rgba(92, 70, 150, 0.15),
+      transparent 42%
+    ),
+    linear-gradient(
+      180deg,
+      #090a10,
+      #030407
+    );
+
+  text-align: center;
+}
+
+
+.live-player-placeholder-icon {
+  display: grid;
+  place-items: center;
+
+  width: 68px;
+  height: 68px;
+
+  margin-bottom: 3px;
+
+  border:
+    1px solid
+    rgba(157, 124, 255, 0.22);
+
+  border-radius: 21px;
+
+  color:
+    var(--live-violet-soft);
+
+  background:
+    rgba(157, 124, 255, 0.07);
+}
+
+
+.live-player-placeholder h2 {
+  color: #ffffff;
+
+  font-size:
+    clamp(
+      20px,
+      3vw,
+      34px
+    );
+
+  font-weight: 720;
+
+  letter-spacing:
+    -0.04em;
+}
+
+
+.live-player-placeholder > p:last-child {
+  max-width: 390px;
+
+  color:
+    var(--live-muted);
+
+  font-size: 12px;
+
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   NOW PLAYING
+   ========================================================= */
+
+.live-now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  min-width: 0;
+
+  padding:
+    15px 18px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.055);
+}
+
+
+.live-now-copy {
+  min-width: 0;
+}
+
+
+.live-now h2 {
+  margin-top: 2px;
+
+  overflow: hidden;
+
+  color: #ffffff;
+
+  font-size:
+    clamp(
+      15px,
+      1.7vw,
+      21px
+    );
+
+  font-weight: 650;
+
+  line-height: 1.35;
+
+  letter-spacing:
+    -0.025em;
+
+  text-overflow:
+    ellipsis;
+
+  white-space: nowrap;
+}
+
+
+.live-now-copy > p:last-child {
+  margin-top: 3px;
+
+  overflow: hidden;
+
+  color:
+    var(--live-muted);
+
+  font-size: 10px;
+
+  text-overflow:
+    ellipsis;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   SPORT
+   ========================================================= */
+
+.live-sport {
+  grid-area: sport;
+
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   SPORT HEADER
+   ========================================================= */
+
+.live-sport-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  flex:
+    0 0 auto;
+
+  min-height: 58px;
+
+  padding:
+    8px 10px;
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.055);
+}
+
+
+.live-sport-heading-copy {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  min-width: 0;
+}
+
+
+.live-sport-heading-copy > div {
+  min-width: 0;
+}
+
+
+.live-sport-icon {
+  display: grid;
+  place-items: center;
+
+  width: 34px;
+  height: 34px;
+
+  flex:
+    0 0 34px;
+
+  border:
+    1px solid
+    rgba(157, 124, 255, 0.22);
+
+  border-radius: 10px;
+
+  color:
+    var(--live-violet-soft);
+
+  background:
+    rgba(157, 124, 255, 0.075);
+}
+
+
+.live-sport-heading h2 {
+  margin-top: 1px;
+
+  overflow: hidden;
+
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 680;
+
+  line-height: 1.3;
+
+  text-overflow:
+    ellipsis;
+
+  white-space: nowrap;
+}
+
+
+.live-sport-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 23px;
+
+  flex-shrink: 0;
+
+  padding:
+    0 7px;
+
+  border-radius: 6px;
+
+  color: #ffffff;
+
+  background:
+    var(--live-live);
+
+  box-shadow:
+    0 4px 14px
+    rgba(255, 38, 56, 0.18);
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing:
+    0.04em;
+}
+
+
+/* =========================================================
+   SPORT CONTENT
+   ========================================================= */
+
+.live-sport-content {
+  flex:
+    1 1 auto;
+
+  width: 100%;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior:
+    contain;
+
+  padding: 7px;
+}
+
+
+.live-sport-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  min-height: 150px;
+
+  color:
+    var(--live-muted);
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   SPORT INTERNAL GRID
+   ========================================================= */
+
+.live-sports-grid {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr);
+
+  gap: 7px;
+
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+}
+
+
+.live-sports-grid > * {
+  min-width: 0;
+
+  grid-column:
+    auto !important;
+
+  grid-row:
+    auto !important;
+}
+
+
+/* =========================================================
+   SPORT PANELS
+   ========================================================= */
+
+.live-matches,
+.live-match-detail {
+  min-width: 0;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 11px;
+
+  background:
+    rgba(0, 0, 0, 0.2);
+}
+
+
+/* =========================================================
+   SPORT GENERIC HEADING
+   ========================================================= */
+
+.live-sport-content
+.live-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 7px;
+
+  min-height: 48px;
+
+  padding:
+    7px 8px;
+}
+
+
+.live-sport-content
+.live-section-heading h2 {
+  min-width: 0;
+
+  overflow-wrap:
+    anywhere;
+
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 650;
+
+  line-height: 1.3;
+}
+
+
+/* =========================================================
+   MATCH ZONE
+   ========================================================= */
+
+.live-match-zone {
+  display: flex;
+  align-items: center;
+
+  gap: 4px;
+
+  margin-top:
+    3px !important;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   MATCH FILTERS
+   ========================================================= */
+
+.live-match-filters {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 4px;
+
+  padding:
+    0 7px
+    7px;
+}
+
+
+.live-match-filters button,
+.live-team-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+
+  min-height: 34px;
+
+  padding:
+    5px 7px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+
+  border-radius: 8px;
+
+  color:
+    #bbb9c5;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  font-size: 9px;
+}
+
+
+.live-match-filters button.is-active,
+.live-team-tabs button.is-active {
+  color: #ffffff;
+
+  border-color:
+    rgba(157, 124, 255, 0.48);
+
+  background:
+    rgba(157, 124, 255, 0.16);
+}
+
+
+.live-match-filters button span {
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   GUIDE STATUS
+   ========================================================= */
+
+.live-guide-status {
+  padding:
+    0 8px
+    7px;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   MATCH LIST
+   ========================================================= */
+
+.live-match-list,
+.live-detail-scroll {
+  overflow-y: auto;
+
+  overscroll-behavior:
+    contain;
+}
+
+
+.live-match-list {
+  max-height: 470px;
+
+  padding:
+    0 6px
+    6px;
+}
+
+
+.live-detail-scroll {
+  max-height: 470px;
+}
+
+
+/* =========================================================
+   MATCH CARD
+   ========================================================= */
+
+.live-match-card {
+  margin-bottom: 5px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.065);
+
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+
+.live-match-card.is-active {
+  border-color:
+    rgba(157, 124, 255, 0.38);
+
+  background:
+    rgba(157, 124, 255, 0.065);
+}
+
+
+.live-match-select {
+  display: block;
+
+  width: 100%;
+
+  padding: 8px;
+
+  border: 0;
+
+  color:
+    var(--live-text);
+
+  background:
+    transparent;
+
+  text-align: left;
+}
+
+
+.live-match-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 6px;
+
+  margin-bottom: 8px;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+.live-match-meta > span:first-child {
+  min-width: 0;
+
+  overflow-wrap:
+    anywhere;
+}
+
+
+/* =========================================================
+   MATCH TEAM
+   ========================================================= */
+
+.live-match-team {
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+
+  margin-top: 5px;
+}
+
+
+.live-match-team strong {
+  flex: 1;
+
+  min-width: 0;
+
+  overflow-wrap:
+    anywhere;
+
+  color:
+    #eeeeF4;
+
+  font-size: 10px;
+  font-weight: 560;
+}
+
+
+.live-match-team b {
+  padding:
+    0 4px;
+
+  color:
+    var(--live-violet-soft);
+
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   TEAM LOGO
+   ========================================================= */
+
+.live-team-logo {
+  display: grid;
+  place-items: center;
+
+  width: 25px;
+  height: 25px;
+
+  flex:
+    0 0 25px;
+
+  overflow: hidden;
+
+  color:
+    var(--live-muted);
+}
+
+
+.live-team-logo img {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit:
+    contain;
+}
+
+
+.live-team-logo.is-large {
+  width: 46px;
+  height: 46px;
+
+  flex:
+    0 0 46px;
+}
+
+
+/* =========================================================
+   MATCH STATUS
+   ========================================================= */
+
+.live-match-status {
+  display: block;
+
+  margin-top: 7px;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   MATCH BROADCAST
+   ========================================================= */
+
+.live-match-broadcast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 6px;
+
+  padding:
+    6px 8px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.055);
+}
+
+
+.live-match-broadcast > span {
+  min-width: 0;
+
+  overflow-wrap:
+    anywhere;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   WATCH
+   ========================================================= */
+
+.live-watch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+
+  min-height: 34px;
+
+  flex-shrink: 0;
+
+  padding:
+    5px 8px;
+
+  border:
+    1px solid
+    rgba(157, 124, 255, 0.4);
+
+  border-radius: 8px;
+
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(157, 124, 255, 0.92),
+      rgba(104, 68, 217, 0.92)
+    );
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   MATCH DETAIL
+   ========================================================= */
+
+.live-match-detail
+.live-section-heading h2 {
+  font-size: 11px;
+
+  overflow-wrap:
+    anywhere;
+}
+
+
+/* =========================================================
+   SCOREBOARD
+   ========================================================= */
+
+.live-scoreboard {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    54px
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: 5px;
+
+  padding:
+    11px 7px
+    15px;
+}
+
+
+.live-scoreboard > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  min-width: 0;
+
+  text-align: center;
+}
+
+
+.live-scoreboard strong {
+  overflow-wrap:
+    anywhere;
+
+  color:
+    #eeeeF4;
+
+  font-size: 9px;
+
+  line-height: 1.35;
+}
+
+
+.live-scoreboard b {
+  color:
+    var(--live-violet-soft);
+
+  font-size: 18px;
+}
+
+
+.live-scoreboard small {
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+/* =========================================================
+   BROADCAST DETAIL
+   ========================================================= */
+
+.live-broadcast-detail {
+  margin:
+    0 7px
+    7px;
+
+  padding: 9px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 9px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+
+.live-broadcast-detail h3 {
+  margin:
+    4px 0 7px;
+
+  color: #ffffff;
+
+  font-size: 10px;
+}
+
+
+.live-broadcast-detail
+> .live-watch {
+  width: 100%;
+
+  margin-top: 8px;
+}
+
+
+/* =========================================================
+   GUIDE SOURCES
+   ========================================================= */
+
+.live-guide-sources {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 4px;
+}
+
+
+.live-guide-sources span {
+  padding:
+    4px 5px;
+
+  border-radius: 5px;
+
+  font-size: 8px;
+}
+
+
+.live-guide-sources
+.is-ok {
+  color: #a8e8ce;
+
+  background:
+    rgba(37, 135, 99, 0.18);
+}
+
+
+.live-guide-sources
+.is-error {
+  color: #ffb5b5;
+
+  background:
+    rgba(161, 33, 33, 0.18);
+}
+
+
+/* =========================================================
+   TEAM DETAIL
+   ========================================================= */
+
+.live-team-detail {
+  padding:
+    0 8px
+    8px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.06);
+}
+
+
+.live-team-detail
+.live-section-heading {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+
+.live-team-tabs {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 5px;
+
+  margin-bottom: 9px;
+}
+
+
+.live-team-tabs button {
+  overflow-wrap:
+    anywhere;
+}
+
+/* =========================================================
+   SPORT — COMPETITION RAIL
+   DESKTOP / BASE
+   ========================================================= */
+
+.live-sport-body {
+  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  height: 100%;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   COMPETITIONS — HORIZONTAL RAIL
+   ========================================================= */
+
+.live-competition-rail {
+  display: flex;
+  align-items: stretch;
+
+  gap: 6px;
+
+  width: 100%;
+  min-width: 0;
+
+  flex: 0 0 auto;
+
+  padding:
+    7px 7px
+    6px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  scrollbar-width: thin;
+
+  overscroll-behavior-x: contain;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+
+/* =========================================================
+   COMPETITION BUTTON
+   ========================================================= */
+
+.live-competition-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+
+  width: 64px;
+  height: 66px;
+
+  min-width: 64px;
+  max-width: 64px;
+
+  flex: 0 0 64px;
+
+  padding: 5px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 10px;
+
+  color:
+    var(--live-text-soft);
+
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    opacity 150ms ease;
+}
+
+
+.live-competition-item:hover {
+  border-color:
+    rgba(157, 124, 255, 0.32);
+
+  background:
+    rgba(157, 124, 255, 0.07);
+}
+
+
+.live-competition-item.is-active {
+  border-color:
+    rgba(157, 124, 255, 0.52);
+
+  background:
+    rgba(157, 124, 255, 0.14);
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(157, 124, 255, 0.08);
+}
+
+
+.live-competition-item.is-empty {
+  opacity: 0.48;
+}
+
+
+/* =========================================================
+   COMPETITION LOGO
+   IMPORTANT : BLOQUE LA TAILLE NATIVE DES SVG / PNG
+   ========================================================= */
+
+.live-competition-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 38px;
+  height: 38px;
+
+  min-width: 38px;
+  min-height: 38px;
+
+  max-width: 38px;
+  max-height: 38px;
+
+  flex: 0 0 38px;
+
+  overflow: hidden;
+}
+
+
+.live-competition-logo img {
+  display: block;
+
+  width: 100% !important;
+  height: 100% !important;
+
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  max-width: 38px !important;
+  max-height: 38px !important;
+
+  object-fit: contain;
+}
+
+
+.live-competition-logo svg {
+  display: block;
+
+  width: 24px;
+  height: 24px;
+
+  max-width: 24px;
+  max-height: 24px;
+
+  flex: 0 0 24px;
+}
+
+
+/* =========================================================
+   COMPETITION COUNT
+   ========================================================= */
+
+.live-competition-item small {
+  display: block;
+
+  width: 100%;
+
+  overflow: hidden;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1;
+
+  text-align: center;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   GUIDE MINI
+   ========================================================= */
+
+.live-guide-mini {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  min-height: 30px;
+
+  flex: 0 0 auto;
+
+  padding:
+    5px 8px;
+
+  overflow: hidden;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.045);
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.045);
+
+  color:
+    var(--live-muted);
+
+  font-size: 9px;
+
+  white-space: nowrap;
+}
+
+
+.live-guide-mini span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+}
+
+
+/* =========================================================
+   COMPACT MATCH LIST
+   ========================================================= */
+
+.live-match-list-compact {
+  flex: 1 1 0;
+
+  width: 100%;
+  height: 0;
+
+  min-width: 0;
+  min-height: 0;
+
+  padding:
+    6px 7px
+    8px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+/* =========================================================
+   FOOTBALL PANELS — COMPACT MATCH CARDS
+   ========================================================= */
+
+.live-match-card-compact {
+  position: relative;
+
+  width: 100%;
+  min-width: 0;
+
+  margin-bottom: 6px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+
+.live-match-card-compact.is-active {
+  border-color:
+    rgba(157, 124, 255, 0.42);
+
+  background:
+    rgba(157, 124, 255, 0.07);
+}
+
+
+.live-match-card-compact.is-live {
+  border-color:
+    rgba(255, 38, 56, 0.22);
+}
+
+
+.live-match-select-compact {
+  display: block;
+
+  width: 100%;
+  min-width: 0;
+
+  padding: 8px;
+
+  border: 0;
+
+  color:
+    var(--live-text);
+
+  background:
+    transparent;
+
+  text-align: left;
+}
+
+
+/* =========================================================
+   MATCH — TOP
+   ========================================================= */
+
+.live-match-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 6px;
+
+  width: 100%;
+  min-width: 0;
+
+  margin-bottom: 8px;
+}
+
+
+.live-match-league {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  min-width: 0;
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+  font-weight: 650;
+}
+
+
+.live-match-league img {
+  display: block;
+
+  width: 16px;
+  height: 16px;
+
+  min-width: 16px;
+  max-width: 16px;
+
+  object-fit: contain;
+
+  flex: 0 0 16px;
+}
+
+
+.live-match-league > span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   MATCH — STATUS
+   ========================================================= */
+
+.live-match-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+
+  min-height: 20px;
+
+  flex: 0 0 auto;
+
+  padding:
+    0 6px;
+
+  border-radius: 999px;
+
+  color:
+    var(--live-text-soft);
+
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  font-size: 7px;
+  font-weight: 750;
+
+  white-space: nowrap;
+}
+
+
+.live-match-status-pill.is-live {
+  color: #ffffff;
+
+  background:
+    var(--live-live);
+}
+
+
+.live-match-status-pill i {
+  display: block;
+
+  width: 4px;
+  height: 4px;
+
+  flex: 0 0 4px;
+
+  border-radius: 50%;
+
+  background:
+    currentColor;
+}
+
+
+/* =========================================================
+   MATCH — SCORE
+   ========================================================= */
+
+.live-score-compact {
+  display: flex;
+  flex-direction: column;
+
+  gap: 6px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+
+.live-score-team {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+
+.live-score-team-name {
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+
+  flex: 1 1 auto;
+
+  min-width: 0;
+}
+
+
+.live-score-team-name .live-team-logo {
+  width: 22px;
+  height: 22px;
+
+  min-width: 22px;
+
+  flex:
+    0 0 22px;
+}
+
+
+.live-score-team-name strong {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color:
+    #eeeeF4;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  line-height: 1.25;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.live-score-team > b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 22px;
+
+  flex: 0 0 auto;
+
+  color:
+    var(--live-violet-soft);
+
+  font-size: 13px;
+  font-weight: 760;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   MATCH — BROADCASTS
+   ========================================================= */
+
+.live-broadcasts-compact {
+  padding:
+    0 8px
+    8px;
+}
+
+
+.live-broadcast-channel-list {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 4px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+
+.live-broadcast-channel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 5px;
+
+  max-width: 100%;
+  min-height: 27px;
+
+  padding:
+    4px 7px;
+
+  border:
+    1px solid
+    rgba(157, 124, 255, 0.22);
+
+  border-radius: 7px;
+
+  color:
+    var(--live-violet-soft);
+
+  background:
+    rgba(157, 124, 255, 0.07);
+
+  font-size: 8px;
+  font-weight: 650;
+}
+
+
+.live-broadcast-channel:hover {
+  color: #ffffff;
+
+  border-color:
+    rgba(157, 124, 255, 0.48);
+
+  background:
+    rgba(157, 124, 255, 0.14);
+}
+
+
+.live-broadcast-channel span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   SPORT STATE
+   ========================================================= */
+
+.live-sport-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+
+  min-height: 90px;
+
+  padding: 14px;
+
+  color:
+    var(--live-muted);
+
+  font-size: 9px;
+
+  text-align: center;
+}
+
+
+.live-sport-state.is-error {
+  color:
+    #ffb6bd;
+}
+
+
+.live-no-match-today {
+  min-height: 90px;
+}
+
+/* =========================================================
+   DESKTOP HEIGHT
+   ========================================================= */
+
+@media (min-width: 951px) {
+
+  .live-layout {
+    min-height:
+      min(
+        760px,
+        calc(
+          100dvh - 130px
+        )
+      );
+  }
+
+
+  .live-browser {
+    max-height:
+      min(
+        760px,
+        calc(
+          100dvh - 130px
+        )
+      );
+  }
+
+
+  .live-sport {
+    max-height:
+      min(
+        760px,
+        calc(
+          100dvh - 130px
+        )
+      );
+  }
+
+
+  .live-browser-search-toggle {
+    display: none;
+  }
+
+
+  .live-browser-search-panel {
+    display: block;
+  }
+  /* =======================================================
+     DESKTOP — SPORT HEIGHT FIX
+     ======================================================= */
+
+  .live-layout.has-sport {
+    align-items: stretch;
+  }
+
+  .live-layout.has-sport .live-sport {
+    height: min(
+      760px,
+      calc(100dvh - 130px)
+    );
+
+    max-height: none;
+
+    min-height: 0;
+  }
+
+  .live-layout.has-sport .live-sport-content {
+    display: flex;
+    flex-direction: column;
+
+    flex: 1 1 0;
+
+    height: auto;
+
+    min-height: 0;
+
+    overflow: hidden;
+
+    padding: 7px;
+  }
+
+  .live-layout.has-sport .live-sports-grid {
+    display: flex;
+    flex-direction: column;
+
+    flex: 1 1 0;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  .live-layout.has-sport .live-sport-body {
+    display: flex;
+    flex-direction: column;
+
+    flex: 1 1 0;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  .live-layout.has-sport .live-competition-rail {
+    flex: 0 0 auto;
+  }
+
+  .live-layout.has-sport .live-guide-mini {
+    flex: 0 0 auto;
+  }
+
+  .live-layout.has-sport .live-match-list-compact {
+    display: block;
+
+    flex: 1 1 auto;
+
+    width: 100%;
+    height: auto;
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+
+
+/* =========================================================
+   LARGE DESKTOP
+   ========================================================= */
+
+@media (min-width: 1500px) {
+
+  .live-layout {
+    grid-template-columns:
+      270px
+      minmax(0, 1fr);
+  }
+
+
+  .live-layout.has-sport {
+    grid-template-columns:
+      250px
+      minmax(0, 1fr)
+      370px;
+  }
+
+
+  .live-channel {
+    min-height: 62px;
+  }
+
+
+  .live-channel-logo {
+    width: 52px;
+    height: 42px;
+
+    flex:
+      0 0 52px;
+  }
+
+}
+
+
+/* =========================================================
+   TABLET / MOBILE LANDSCAPE
+   ========================================================= */
+
+@media
+  (max-width: 950px)
+  and (orientation: landscape) {
+      /* =======================================================
+     SPORT — COMPACT COMPETITION RAIL
+     ======================================================= */
+
+  .live-sport-body {
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  .live-competition-rail {
+    display: flex;
+    align-items: center;
+
+    gap: 4px;
+
+    width: 100%;
+    min-width: 0;
+
+    flex: 0 0 auto;
+
+    padding:
+      4px 4px
+      3px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    scrollbar-width: none;
+
+    overscroll-behavior-x: contain;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .live-competition-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .live-competition-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    gap: 2px;
+
+    width: 42px;
+    height: 44px;
+
+    min-width: 42px;
+    max-width: 42px;
+
+    flex: 0 0 42px;
+
+    padding: 3px;
+
+    overflow: hidden;
+
+    border-radius: 8px;
+  }
+
+  .live-competition-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 26px;
+    height: 26px;
+
+    min-width: 26px;
+    min-height: 26px;
+
+    max-width: 26px;
+    max-height: 26px;
+
+    flex: 0 0 26px;
+
+    overflow: hidden;
+  }
+
+  .live-competition-logo img {
+    display: block;
+
+    width: 100% !important;
+    height: 100% !important;
+
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    max-width: 26px !important;
+    max-height: 26px !important;
+
+    object-fit: contain;
+  }
+
+  .live-competition-logo svg {
+    width: 18px;
+    height: 18px;
+
+    flex: 0 0 18px;
+  }
+
+  .live-competition-item small {
+    display: block;
+
+    width: 100%;
+
+    overflow: hidden;
+
+    color: var(--live-muted);
+
+    font-size: 7px;
+    font-weight: 700;
+
+    line-height: 1;
+
+    text-align: center;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+
+  /* =======================================================
+     SPORT — GUIDE
+     ======================================================= */
+
+  .live-guide-mini {
+    display: flex;
+    align-items: center;
+
+    gap: 4px;
+
+    min-height: 23px;
+
+    flex: 0 0 auto;
+
+    padding:
+      3px 5px;
+
+    overflow: hidden;
+
+    font-size: 7px;
+
+    white-space: nowrap;
+  }
+
+  .live-guide-mini span {
+    min-width: 0;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+  }
+
+
+  /* =======================================================
+     SPORT — MATCHES
+     ======================================================= */
+
+  .live-match-list-compact {
+  display: block;
+
+  width: 100%;
+  height: auto;
+
+  min-width: 0;
+  min-height: 120px;
+
+  flex: 1 1 auto;
+
+  padding:
+    6px 7px
+    8px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+  /* =======================================================
+     PAGE
+     ======================================================= */
+
+  .live-premium {
+    height: 100%;
+
+    padding:
+      5px 6px
+      max(
+        5px,
+        env(
+          safe-area-inset-bottom
+        )
+      );
+
+    overflow:
+      hidden;
+  }
+
+
+  /* =======================================================
+     TOP PAGE HEADER
+     ======================================================= */
+
+  .live-heading {
+    display: none;
+  }
+
+
+  /* =======================================================
+     LAYOUT WITHOUT SPORT
+
+     Browser ~ 180 px
+     Player = everything else
+     ======================================================= */
+
+  .live-layout {
+    grid-template-columns:
+      clamp(
+        168px,
+        25vw,
+        190px
+      )
+      minmax(
+        0,
+        1fr
+      );
+
+    grid-template-areas:
+      "browser stage";
+
+    gap: 5px;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    margin: 0;
+  }
+
+
+  /* =======================================================
+     LAYOUT WITH SPORT
+
+     Browser + reduced player + sport
+
+     SPORT IS A REAL COLUMN.
+     NO OVERLAY.
+     ======================================================= */
+
+   .live-layout.has-sport {
+    grid-template-columns:
+      clamp(145px, 20vw, 170px)
+      minmax(0, 1fr)
+      clamp(175px, 25vw, 210px);
+
+    grid-template-areas:
+      "browser stage sport";
+
+    gap: 5px;
+
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* =======================================================
+     SURFACES
+     ======================================================= */
+
+  .live-surface {
+    border-radius: 11px;
+  }
+
+
+  /* =======================================================
+     BROWSER
+     ======================================================= */
+
+  .live-browser {
+    position: relative;
+
+    width: auto;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    max-width: none;
+    max-height: none;
+
+    overflow: hidden;
+  }
+
+
+  /* =======================================================
+     BROWSER TOPBAR
+     ======================================================= */
+
+  .live-browser-topbar-main {
+    min-height: 39px;
+
+    padding:
+      3px 4px
+      2px 6px;
+  }
+
+
+  .live-browser-title {
+    gap: 5px;
+
+    font-size: 11px;
+  }
+
+
+  .live-browser-title svg {
+    width: 14px;
+    height: 14px;
+  }
+
+
+  /* =======================================================
+     BACK
+     ======================================================= */
+
+  .live-browser-back {
+    gap: 3px;
+
+    min-height: 31px;
+
+    max-width:
+      calc(
+        100% - 37px
+      );
+
+    padding:
+      0 6px 0 3px;
+
+    border-radius: 8px;
+
+    font-size: 10px;
+  }
+
+
+  .live-browser-back svg {
+    width: 15px;
+    height: 15px;
+  }
+
+
+  /* =======================================================
+     SEARCH BUTTON
+     ======================================================= */
+
+  .live-browser-search-toggle {
+    display: grid;
+
+    width: 31px;
+    height: 31px;
+
+    flex:
+      0 0 31px;
+
+    border-radius: 8px;
+  }
+
+
+  .live-browser-search-toggle svg {
+    width: 15px;
+    height: 15px;
+  }
+
+
+  /* =======================================================
+     CONTEXT
+     ======================================================= */
+
+  .live-browser-context {
+    min-height: 34px;
+
+    padding:
+      1px 7px
+      5px;
+  }
+
+
+  .live-browser-context-label {
+    font-size: 6.5px;
+  }
+
+
+  .live-browser-context-copy strong {
+    font-size: 9px;
+  }
+
+
+  .live-browser-total {
+    min-width: 21px;
+    height: 18px;
+
+    padding:
+      0 5px;
+
+    font-size: 7px;
+  }
+
+
+  /* =======================================================
+     SEARCH PANEL
+
+     Hidden by default on landscape.
+     ======================================================= */
+
+  .live-browser-search-panel {
+    display: none;
+
+    padding:
+      0 5px
+      5px;
+  }
+
+
+  .live-browser.is-searching
+  .live-browser-search-panel {
+    display: block;
+  }
+
+
+  .live-browser-search {
+    min-height: 31px;
+
+    gap: 5px;
+
+    padding:
+      0 6px;
+
+    border-radius: 8px;
+  }
+
+
+  .live-browser-search > svg {
+    width: 13px;
+    height: 13px;
+  }
+
+
+  .live-browser-search input {
+    min-height: 29px;
+
+    font-size: 10px;
+  }
+
+
+  .live-browser-search-clear {
+    width: 21px;
+    height: 21px;
+
+    flex:
+      0 0 21px;
+  }
+
+
+  /* =======================================================
+     BROWSER LIST
+     ======================================================= */
+
+  .live-browser-scroll {
+    min-height: 0;
+
+    overflow-y: auto;
+
+    touch-action:
+      pan-y;
+  }
+
+
+  /* =======================================================
+     CATEGORY LIST
+     ======================================================= */
+
+  .live-category-list {
+    display: block;
+
+    max-height: none;
+
+    padding:
+      4px 4px
+      6px;
+  }
+
+
+  .live-category {
+    gap: 6px;
+
+    min-height: 39px;
+
+    margin-bottom: 2px;
+
+    padding:
+      3px 4px;
+
+    border-radius: 8px;
+  }
+
+
+  .live-category-icon {
+    width: 27px;
+    height: 27px;
+
+    flex:
+      0 0 27px;
+
+    border-radius: 7px;
+  }
+
+
+  .live-category-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+
+  .live-category-copy strong {
+    font-size: 9.5px;
+
+    line-height: 1.25;
+  }
+
+
+  .live-category-chevron {
+    width: 12px;
+    height: 12px;
+  }
+
+
+  /* =======================================================
+     CHANNEL LIST
+     ======================================================= */
+
+  .live-channel-list {
+    max-height: none;
+
+    padding:
+      3px 4px
+      6px;
+  }
+
+
+  .live-channel-grid {
+    display: grid;
+
+    grid-template-columns:
+      minmax(
+        0,
+        1fr
+      );
+
+    gap: 2px;
+  }
+
+
+  .live-channel {
+    gap: 6px;
+
+    min-height: 45px;
+
+    padding:
+      3px 4px;
+
+    border-radius: 8px;
+
+    contain-intrinsic-size:
+      auto 45px;
+  }
+
+
+  .live-channel-logo {
+    width: 38px;
+    height: 31px;
+
+    flex:
+      0 0 38px;
+
+    padding: 3px;
+
+    border-radius: 7px;
+  }
+
+
+  .live-channel-copy strong {
+    font-size: 9.5px;
+
+    line-height: 1.25;
+  }
+
+
+  .live-channel-copy small {
+    margin-top: 1px;
+
+    font-size: 7px;
+  }
+
+
+  .live-more {
+    min-height: 31px;
+
+    margin-top: 4px;
+
+    border-radius: 8px;
+
+    font-size: 8px;
+  }
+
+
+  .live-more small {
+    font-size: 7px;
+  }
+
+
+  /* =======================================================
+     EMPTY
+     ======================================================= */
+
+  .live-empty {
+    min-height: 90px;
+
+    gap: 6px;
+
+    padding:
+      10px 6px;
+
+    font-size: 9px;
+  }
+
+
+  .live-empty svg {
+    width: 18px;
+    height: 18px;
+  }
+
+
+  /* =======================================================
+     ERROR
+     ======================================================= */
+
+  .live-error {
+    margin:
+      0 4px 4px;
+
+    padding: 5px;
+
+    font-size: 8px;
+  }
+
+
+  /* =======================================================
+     PLAYER STAGE
+     ======================================================= */
+
+  .live-stage {
+    position: relative;
+
+    width: auto;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    max-width: none;
+
+    overflow: hidden;
+  }
+
+
+  /* =======================================================
+     PLAYER
+
+     Preserve 16:9.
+     ======================================================= */
+
+  .live-player-frame {
+    width: 100%;
+
+    min-width: 0;
+    max-width: 100%;
+
+    flex:
+      0 0 auto;
+
+    aspect-ratio:
+      16 / 9;
+
+    overflow: hidden;
+
+    background: #000000;
+  }
+
+
+  .live-player-frame > * {
+    width: 100% !important;
+    height: 100% !important;
+
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+
+  /* =======================================================
+     NOW PLAYING
+     ======================================================= */
+
+  .live-now {
+    flex:
+      0 0 auto;
+
+    gap: 6px;
+
+    min-height: 42px;
+
+    padding:
+      5px 8px;
+  }
+
+
+  .live-now .live-eyebrow {
+    display: none;
+  }
+
+
+  .live-now h2 {
+    font-size: 10px;
+
+    line-height: 1.2;
+  }
+
+
+  .live-now-copy > p:last-child {
+    margin-top: 2px;
+
+    font-size: 7px;
+  }
+
+
+  .live-now
+  .live-on-air {
+    padding:
+      4px 5px;
+
+    font-size: 7px;
+  }
+
+
+  /* =======================================================
+     PLAYER PLACEHOLDER
+     ======================================================= */
+
+  .live-player-placeholder {
+    gap: 5px;
+
+    padding: 8px;
+  }
+
+
+  .live-player-placeholder-icon {
+    width: 38px;
+    height: 38px;
+
+    margin-bottom: 0;
+
+    border-radius: 11px;
+  }
+
+
+  .live-player-placeholder-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+
+  .live-player-placeholder
+  .live-eyebrow {
+    display: none;
+  }
+
+
+  .live-player-placeholder h2 {
+    font-size: 15px;
+  }
+
+
+  .live-player-placeholder
+  > p:last-child {
+    font-size: 8px;
+
+    line-height: 1.35;
+  }
+
+
+  /* =======================================================
+     SPORT COLUMN
+     ======================================================= */
+
+    .live-layout.has-sport
+  .live-sport {
+    position: relative;
+
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    max-width: 100%;
+    max-height: 100%;
+
+    overflow: hidden;
+
+    contain: layout paint;
+  }
+
+
+  /* =======================================================
+     SPORT HEADER
+     ======================================================= */
+
+  .live-sport-heading {
+    min-height: 39px;
+
+    padding:
+      3px 5px;
+  }
+
+
+  .live-sport-heading-copy {
+    gap: 5px;
+  }
+
+
+  .live-sport-icon {
+    width: 27px;
+    height: 27px;
+
+    flex:
+      0 0 27px;
+
+    border-radius: 8px;
+  }
+
+
+  .live-sport-icon svg {
+    width: 13px;
+    height: 13px;
+  }
+
+
+  .live-sport-heading
+  .live-eyebrow {
+    display: none;
+  }
+
+
+  .live-sport-heading h2 {
+    font-size: 9px;
+  }
+
+
+  .live-sport-status {
+    min-height: 18px;
+
+    padding:
+      0 5px;
+
+    font-size: 6px;
+  }
+
+
+  /* =======================================================
+     SPORT CONTENT
+     ======================================================= */
+
+    .live-sport-content {
+    flex: 1 1 0;
+
+    width: 100%;
+    height: 0;
+
+    min-width: 0;
+    min-height: 0;
+
+    padding: 4px;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    overscroll-behavior: contain;
+  }
+
+    .live-sports-grid {
+    display: grid;
+
+    grid-template-columns:
+      minmax(0, 1fr);
+
+    gap: 4px;
+
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+
+    overflow: visible;
+  }
+
+  .live-sports-grid > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .live-matches,
+  .live-match-detail {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+
+  .live-sport-content
+  .live-section-heading {
+    min-height: 36px;
+
+    padding:
+      4px 5px;
+  }
+
+
+  .live-sport-content
+  .live-section-heading h2 {
+    font-size: 8px;
+  }
+
+
+  .live-sport-content
+  .live-eyebrow {
+    font-size: 6px;
+  }
+
+
+  /* =======================================================
+     MATCH
+     ======================================================= */
+
+  .live-match-list,
+  .live-detail-scroll {
+    width: 100%;
+    min-width: 0;
+
+    max-height: none;
+
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .live-match-list {
+    padding:
+      0 3px
+      3px;
+  }
+
+
+  .live-match-card {
+    margin-bottom: 3px;
+
+    border-radius: 7px;
+  }
+
+
+  .live-match-select {
+    padding: 5px;
+  }
+
+
+  .live-match-meta {
+    gap: 3px;
+
+    margin-bottom: 5px;
+
+    font-size: 6.5px;
+  }
+
+
+  .live-match-team {
+    gap: 4px;
+
+    margin-top: 3px;
+  }
+
+
+  .live-match-team strong {
+    font-size: 8px;
+  }
+
+
+  .live-match-team b {
+    padding:
+      0 2px;
+
+    font-size: 10px;
+  }
+
+
+  .live-team-logo {
+    width: 20px;
+    height: 20px;
+
+    flex:
+      0 0 20px;
+  }
+
+
+  .live-team-logo.is-large {
+    width: 34px;
+    height: 34px;
+
+    flex:
+      0 0 34px;
+  }
+
+
+  .live-match-status {
+    margin-top: 4px;
+
+    font-size: 6.5px;
+  }
+
+
+  .live-match-broadcast {
+    gap: 3px;
+
+    padding:
+      4px 5px;
+  }
+
+
+  .live-match-broadcast
+  > span {
+    font-size: 6.5px;
+  }
+
+
+  .live-watch {
+    min-height: 27px;
+
+    padding:
+      3px 5px;
+
+    border-radius: 6px;
+
+    font-size: 6.5px;
+  }
+
+
+  /* =======================================================
+     SCOREBOARD
+     ======================================================= */
+
+  .live-scoreboard {
+    grid-template-columns:
+      minmax(0, 1fr)
+      42px
+      minmax(0, 1fr);
+
+    gap: 3px;
+
+    padding:
+      7px 4px
+      9px;
+  }
+
+
+  .live-scoreboard > div {
+    gap: 4px;
+  }
+
+
+  .live-scoreboard strong {
+    font-size: 7px;
+  }
+
+
+  .live-scoreboard b {
+    font-size: 14px;
+  }
+
+
+  .live-scoreboard small {
+    font-size: 6px;
+  }
+
+
+  /* =======================================================
+     SPORT FILTERS
+     ======================================================= */
+
+  .live-match-filters {
+    gap: 3px;
+
+    padding:
+      0 4px
+      4px;
+  }
+
+
+  .live-match-filters button,
+  .live-team-tabs button {
+    min-height: 27px;
+
+    padding:
+      3px 5px;
+
+    border-radius: 6px;
+
+    font-size: 7px;
+  }
+
+
+  .live-guide-status {
+    padding:
+      0 5px
+      4px;
+
+    font-size: 6.5px;
+  }
+
+
+  /* =======================================================
+     BROADCAST DETAIL
+     ======================================================= */
+
+  .live-broadcast-detail {
+    margin:
+      0 4px
+      4px;
+
+    padding: 6px;
+
+    border-radius: 7px;
+  }
+
+
+  .live-broadcast-detail h3 {
+    margin:
+      3px 0 5px;
+
+    font-size: 8px;
+  }
+
+}
+
+/* =========================================================
+   VERY SMALL LANDSCAPE
+   ========================================================= */
+
+@media
+  (max-width: 700px)
+  and (orientation: landscape) {
+
+  .live-premium {
+    padding:
+      4px;
+  }
+
+
+  /* =======================================================
+     NORMAL
+     ======================================================= */
+
+  .live-layout {
+    grid-template-columns:
+      clamp(
+        150px,
+        24vw,
+        170px
+      )
+      minmax(
+        0,
+        1fr
+      );
+
+    gap: 4px;
+  }
+
+
+  /* =======================================================
+     SPORT
+
+     Browser remains usable.
+     Player shrinks.
+     Sport remains third column.
+     ======================================================= */
+
+  .live-layout.has-sport {
+    grid-template-columns:
+      clamp(125px, 19vw, 145px)
+      minmax(0, 1fr)
+      clamp(160px, 24vw, 185px);
+
+    grid-template-areas:
+      "browser stage sport";
+
+    gap: 4px;
+
+    min-width: 0;
+  }
+
+
+  /* =======================================================
+     BROWSER HEADER
+     ======================================================= */
+
+  .live-browser-topbar-main {
+    min-height: 36px;
+
+    padding:
+      2px 3px
+      1px 5px;
+  }
+
+
+  .live-browser-back {
+    min-height: 29px;
+
+    font-size: 9px;
+  }
+
+
+  .live-browser-search-toggle {
+    width: 29px;
+    height: 29px;
+
+    flex:
+      0 0 29px;
+  }
+
+
+  .live-browser-context {
+    min-height: 30px;
+
+    padding:
+      0 6px
+      4px;
+  }
+
+
+  .live-browser-context-copy strong {
+    font-size: 8px;
+  }
+
+
+  /* =======================================================
+     CATEGORY
+     ======================================================= */
+
+  .live-category {
+    min-height: 36px;
+  }
+
+
+  .live-category-icon {
+    width: 24px;
+    height: 24px;
+
+    flex:
+      0 0 24px;
+  }
+
+
+  .live-category-copy strong {
+    font-size: 8.5px;
+  }
+
+
+  /* =======================================================
+     CHANNEL
+     ======================================================= */
+
+  .live-channel {
+    min-height: 41px;
+
+    gap: 5px;
+  }
+
+
+  .live-channel-logo {
+    width: 34px;
+    height: 28px;
+
+    flex:
+      0 0 34px;
+  }
+
+
+  .live-channel-copy strong {
+    font-size: 8.5px;
+  }
+
+
+  .live-channel-copy small {
+    font-size: 6.5px;
+  }
+
+
+  /* =======================================================
+     PLAYER INFO
+     ======================================================= */
+
+  .live-now {
+    min-height: 37px;
+
+    padding:
+      4px 6px;
+  }
+
+
+  .live-now h2 {
+    font-size: 9px;
+  }
+
+
+  .live-now-copy
+  > p:last-child {
+    font-size: 6.5px;
+  }
+
+
+  /* =======================================================
+     SPORT
+     ======================================================= */
+
+  .live-sport-heading {
+    min-height: 36px;
+  }
+
+
+  .live-sport-icon {
+    width: 24px;
+    height: 24px;
+
+    flex:
+      0 0 24px;
+  }
+
+
+  .live-sport-heading h2 {
+    font-size: 8px;
+  }
+
+
+  .live-sport-content {
+    padding: 3px;
+  }
+
+}
+
+
+/* =========================================================
+   PORTRAIT
+
+   APP CONTENT HIDDEN.
+   PREMIUM ORIENTATION EXPERIENCE ONLY.
+   ========================================================= */
+
+.live-rotate-device {
+  display: none;
+}
+
+
+@media
+  (max-width: 1024px)
+  and (orientation: portrait) {
+
+  .live-premium {
+    position: relative;
+
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+
+    padding: 0;
+
+    overflow: hidden;
+
+    background:
+      radial-gradient(
+        circle at 50% 14%,
+        rgba(119, 82, 221, 0.19),
+        transparent 32%
+      ),
+      radial-gradient(
+        circle at 85% 88%,
+        rgba(80, 47, 173, 0.14),
+        transparent 34%
+      ),
+      linear-gradient(
+        180deg,
+        #06070d 0%,
+        #090713 54%,
+        #05050a 100%
+      );
+  }
+
+
+  .live-heading,
+  .live-layout {
+    display: none !important;
+  }
+
+
+  .live-rotate-device {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 100;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    padding:
+      max(
+        22px,
+        env(
+          safe-area-inset-top
+        )
+      )
+      18px
+      max(
+        18px,
+        env(
+          safe-area-inset-bottom
+        )
+      );
+  }
+
+
+  /* =======================================================
+     CARD
+     ======================================================= */
+
+  .live-rotate-card {
+    position: relative;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+    height: 100%;
+    max-width: 560px;
+
+    overflow: hidden;
+
+    text-align: center;
+  }
+
+
+  /* =======================================================
+     ORIENTATION VISUAL
+     ======================================================= */
+
+  .live-orientation-visual {
+    position: relative;
+
+    width:
+      min(
+        88vw,
+        440px
+      );
+
+    height:
+      clamp(
+        210px,
+        34vh,
+        320px
+      );
+
+    flex:
+      0 0 auto;
+
+    margin-bottom:
+      clamp(
+        10px,
+        2vh,
+        22px
+      );
+  }
+
+
+  /* =======================================================
+     PHONE COMMON
+     ======================================================= */
+
+  .live-phone {
+    position: absolute;
+
+    padding: 5px;
+
+    border:
+      1px solid
+      rgba(203, 184, 255, 0.52);
+
+    background:
+      linear-gradient(
+        145deg,
+        rgba(172, 143, 255, 0.88),
+        rgba(72, 48, 132, 0.82)
+      );
+
+    box-shadow:
+      0 20px 55px
+      rgba(67, 39, 145, 0.35),
+      0 0 30px
+      rgba(157, 124, 255, 0.18),
+      inset 0 1px 0
+      rgba(255, 255, 255, 0.55);
+  }
+
+
+  .live-phone-screen {
+    position: relative;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    border:
+      2px solid
+      #09080d;
+
+    background:
+      #07080b;
+  }
+
+
+  /* =======================================================
+     PORTRAIT PHONE
+     ======================================================= */
+
+  .live-phone-portrait {
+    left: 8%;
+    top: 5%;
+
+    width:
+      clamp(
+        92px,
+        25vw,
+        125px
+      );
+
+    height:
+      clamp(
+        174px,
+        46vw,
+        235px
+      );
+
+    border-radius: 22px;
+
+    transform:
+      rotate(-7deg);
+  }
+
+
+  .live-phone-portrait
+  .live-phone-screen {
+    border-radius: 17px;
+  }
+
+
+  /* =======================================================
+     LANDSCAPE PHONE
+     ======================================================= */
+
+  .live-phone-landscape {
+    right: 2%;
+    bottom: 3%;
+
+    width:
+      clamp(
+        220px,
+        59vw,
+        310px
+      );
+
+    height:
+      clamp(
+        122px,
+        33vw,
+        174px
+      );
+
+    border-radius: 22px;
+
+    transform:
+      rotate(5deg);
+  }
+
+
+  .live-phone-landscape
+  .live-phone-screen {
+    border-radius: 17px;
+  }
+
+
+  /* =======================================================
+     STADIUM
+     ======================================================= */
+
+  .live-phone-stadium {
+    position: absolute;
+
+    inset: 0;
+
+    overflow: hidden;
+
+    background:
+      linear-gradient(
+        180deg,
+        #14101f 0%,
+        #19142b 36%,
+        #090b0e 37%,
+        #111612 100%
+      );
+  }
+
+
+  .live-stadium-sky {
+    position: absolute;
+
+    inset:
+      0 0 48%;
+
+    background:
+      radial-gradient(
+        circle at 50% 120%,
+        rgba(137, 102, 255, 0.32),
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        #0d0b17,
+        #1b1530
+      );
+  }
+
+
+  .live-stadium-lights {
+    position: absolute;
+
+    left: 7%;
+    right: 7%;
+    top: 20%;
+
+    height: 4px;
+
+    border-radius: 100%;
+
+    background:
+      repeating-linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.95)
+        0 4px,
+        transparent
+        4px 12px
+      );
+
+    box-shadow:
+      0 0 15px
+      rgba(210, 198, 255, 0.72);
+  }
+
+
+  .live-stadium-stands {
+    position: absolute;
+
+    left: -5%;
+    right: -5%;
+    top: 37%;
+
+    height: 34%;
+
+    border-radius:
+      50% 50%
+      0 0;
+
+    background:
+      repeating-linear-gradient(
+        90deg,
+        #282235
+        0 3px,
+        #4b3f61
+        3px 5px,
+        #1b1823
+        5px 8px
+      );
+
+    box-shadow:
+      inset 0 7px 12px
+      rgba(0, 0, 0, 0.48);
+  }
+
+
+  .live-stadium-pitch {
+    position: absolute;
+
+    left: 8%;
+    right: 8%;
+    bottom: -15%;
+
+    height: 52%;
+
+    border:
+      1px solid
+      rgba(255, 255, 255, 0.34);
+
+    background:
+      repeating-linear-gradient(
+        90deg,
+        #173a27
+        0 18px,
+        #1c4a2f
+        18px 36px
+      );
+
+    transform:
+      perspective(170px)
+      rotateX(57deg);
+
+    transform-origin:
+      center bottom;
+  }
+
+
+  /* =======================================================
+     PHONE CAMERA
+     ======================================================= */
+
+  .live-phone-camera {
+    position: absolute;
+
+    left: 7px;
+    top: 50%;
+
+    z-index: 5;
+
+    width: 6px;
+    height: 22px;
+
+    border-radius: 999px;
+
+    background:
+      rgba(0, 0, 0, 0.85);
+
+    transform:
+      translateY(-50%);
+  }
+
+
+  /* =======================================================
+     PHONE LIVE BADGE
+     ======================================================= */
+
+  .live-phone-live-badge {
+    position: absolute;
+
+    z-index: 6;
+
+    top: 9px;
+    right: 9px;
+
+    display: inline-flex;
+    align-items: center;
+
+    gap: 4px;
+
+    padding:
+      4px 6px;
+
+    border-radius: 5px;
+
+    color: #ffffff;
+
+    background:
+      var(--live-live);
+
+    box-shadow:
+      0 4px 12px
+      rgba(255, 38, 56, 0.28);
+
+    font-size: 6px;
+    font-weight: 850;
+  }
+
+
+  .live-phone-live-badge
+  span {
+    width: 4px;
+    height: 4px;
+
+    border-radius: 50%;
+
+    background: #ffffff;
+  }
+
+
+  /* =======================================================
+     PLAYER BAR
+     ======================================================= */
+
+  .live-phone-player-bar {
+    position: absolute;
+
+    z-index: 6;
+
+    left: 8%;
+    right: 8%;
+    bottom: 9px;
+
+    height: 3px;
+
+    overflow: hidden;
+
+    border-radius: 100px;
+
+    background:
+      rgba(255, 255, 255, 0.24);
+  }
+
+
+  .live-phone-player-bar
+  span {
+    display: block;
+
+    width: 44%;
+    height: 100%;
+
+    border-radius: inherit;
+
+    background:
+      var(--live-violet-soft);
+  }
+
+
+  /* =======================================================
+     ROTATION ARROW
+     ======================================================= */
+
+  .live-orientation-arrow {
+    position: absolute;
+
+    z-index: 20;
+
+    left: 35%;
+    top: 20%;
+
+    width:
+      clamp(
+        72px,
+        19vw,
+        100px
+      );
+
+    color:
+      rgba(255, 255, 255, 0.92);
+
+    filter:
+      drop-shadow(
+        0 5px 9px
+        rgba(0, 0, 0, 0.45)
+      );
+
+    transform:
+      rotate(10deg);
+  }
+
+
+  /* =======================================================
+     COPY
+     ======================================================= */
+
+  .live-rotate-copy {
+    position: relative;
+
+    z-index: 5;
+
+    width: 100%;
+    max-width: 500px;
+
+    padding:
+      0 8px;
+  }
+
+
+  .live-rotate-kicker {
+    margin-bottom:
+      8px !important;
+
+    color:
+      var(--live-violet-soft);
+
+    font-size: 9px;
+    font-weight: 800;
+
+    letter-spacing:
+      0.2em;
+
+    text-transform:
+      uppercase;
+  }
+
+
+  .live-rotate-copy h2 {
+    color: #ffffff;
+
+    font-size:
+      clamp(
+        27px,
+        8vw,
+        45px
+      );
+
+    font-weight: 760;
+
+    line-height: 1.06;
+
+    letter-spacing:
+      -0.055em;
+  }
+
+
+  .live-rotate-copy h2 span {
+    color:
+      var(--live-violet-soft);
+  }
+
+
+  .live-rotate-accent {
+    color:
+      #b79cff !important;
+  }
+
+
+  .live-rotate-description {
+    max-width: 430px;
+
+    margin:
+      15px auto
+      0 !important;
+
+    color:
+      #aaa8b5;
+
+    font-size:
+      clamp(
+        11px,
+        3.1vw,
+        14px
+      );
+
+    line-height: 1.65;
+  }
+
+
+  /* =======================================================
+     AUTO ORIENTATION
+     ======================================================= */
+
+  .live-auto-orientation {
+    position: relative;
+
+    z-index: 5;
+
+    display: inline-flex;
+    align-items: center;
+
+    gap: 7px;
+
+    margin-top:
+      18px;
+
+    padding:
+      8px 12px;
+
+    border:
+      1px solid
+      rgba(157, 124, 255, 0.17);
+
+    border-radius: 999px;
+
+    color:
+      #9895a6;
+
+    background:
+      rgba(157, 124, 255, 0.045);
+
+    font-size: 9px;
+  }
+
+
+  .live-auto-orientation-dot {
+    width: 6px;
+    height: 6px;
+
+    border-radius: 50%;
+
+    background:
+      var(--live-violet);
+
+    box-shadow:
+      0 0 10px
+      rgba(157, 124, 255, 0.75);
+
+    animation:
+      live-orientation-pulse
+      1.8s ease-in-out
+      infinite;
+  }
+
+
+  /* =======================================================
+     WAVES
+     ======================================================= */
+
+  .live-rotate-wave {
+    position: absolute;
+
+    z-index: 1;
+
+    left: -18%;
+    right: -18%;
+    bottom: -4%;
+
+    height: 23%;
+
+    pointer-events: none;
+
+    opacity: 0.72;
+
+    transform:
+      rotate(-4deg);
+  }
+
+
+  .live-rotate-wave span {
+    position: absolute;
+
+    left: 0;
+    right: 0;
+
+    height: 40px;
+
+    border-top:
+      2px solid
+      rgba(157, 124, 255, 0.24);
+
+    border-radius: 50%;
+  }
+
+
+  .live-rotate-wave
+  span:nth-child(1) {
+    bottom: 0;
+
+    transform:
+      scaleX(1.2);
+  }
+
+
+  .live-rotate-wave
+  span:nth-child(2) {
+    bottom: 17px;
+
+    opacity: 0.72;
+
+    transform:
+      scaleX(1.05);
+  }
+
+
+  .live-rotate-wave
+  span:nth-child(3) {
+    bottom: 34px;
+
+    opacity: 0.48;
+
+    transform:
+      scaleX(0.94);
+  }
+
+
+  .live-rotate-wave
+  span:nth-child(4) {
+    bottom: 51px;
+
+    opacity: 0.26;
+
+    transform:
+      scaleX(0.82);
+  }
+
+}
+
+
+/* =========================================================
+   SMALL PORTRAIT
+   ========================================================= */
+
+@media
+  (max-width: 430px)
+  and (orientation: portrait) {
+
+  .live-orientation-visual {
+    width: 92vw;
+
+    height:
+      clamp(
+        190px,
+        31vh,
+        255px
+      );
+  }
+
+
+  .live-phone-portrait {
+    left: 6%;
+  }
+
+
+  .live-phone-landscape {
+    right: 0;
+  }
+
+
+  .live-rotate-description {
+    max-width: 340px;
+  }
+
+
+  .live-auto-orientation {
+    margin-top: 14px;
+  }
+
+}
+
+
+/* =========================================================
+   SHORT PORTRAIT
+   ========================================================= */
+
+@media
+  (max-width: 1024px)
+  and (orientation: portrait)
+  and (max-height: 700px) {
+
+  .live-orientation-visual {
+    height: 190px;
+
+    margin-bottom: 5px;
+  }
+
+
+  .live-phone-portrait {
+    width: 82px;
+    height: 154px;
+  }
+
+
+  .live-phone-landscape {
+    width: 200px;
+    height: 112px;
+  }
+
+
+  .live-rotate-copy h2 {
+    font-size: 27px;
+  }
+
+
+  .live-rotate-description {
+    margin-top:
+      9px !important;
+
+    font-size: 10px;
+
+    line-height: 1.45;
+  }
+
+
+  .live-auto-orientation {
+    margin-top: 10px;
+  }
+
+}
+
+
+/* =========================================================
+   ORIENTATION PULSE
+   ========================================================= */
+
+@keyframes live-orientation-pulse {
+
+  0%,
+  100% {
+    opacity: 0.45;
+
+    transform:
+      scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+
+    transform:
+      scale(1);
+  }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media
+  (prefers-reduced-motion: reduce) {
+
+  .live-premium *,
+  .live-premium *::before,
+  .live-premium *::after {
+    animation-duration:
+      0.01ms !important;
+
+    animation-iteration-count:
+      1 !important;
+
+    transition-duration:
+      0.01ms !important;
+
+    scroll-behavior:
+      auto !important;
+  }
+
+}
+/* =========================================================
+   PLAYER — SPORT MATCH STRIP
+   ========================================================= */
+
+.live-now.has-sport-match {
+  display: block;
+
+  padding:
+    10px 14px 11px;
+
+  overflow: hidden;
+}
+
+
+.live-now-match {
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+
+/* HEADER */
+
+.live-now-match-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+
+.live-now-match-league {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  min-width: 0;
+}
+
+
+.live-now-match-league img {
+  display: block;
+
+  width: 25px;
+  height: 25px;
+
+  flex: 0 0 25px;
+
+  object-fit: contain;
+}
+
+
+.live-now-match-league > div {
+  min-width: 0;
+}
+
+
+.live-now-match-league span {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color:
+    var(--live-violet-soft);
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+}
+
+
+.live-now-match-league strong {
+  display: block;
+
+  overflow: hidden;
+
+  color:
+    var(--live-text);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* COUNTDOWN */
+
+.live-now-countdown {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  flex: 0 0 auto;
+}
+
+
+.live-now-countdown span {
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+  font-weight: 700;
+
+  letter-spacing: 0.07em;
+}
+
+
+.live-now-countdown strong {
+  min-width: 78px;
+
+  color:
+    var(--live-violet-soft);
+
+  font-size: 15px;
+  font-weight: 800;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  text-align: right;
+}
+
+
+/* LIVE */
+
+.live-now-match-live {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 5px;
+
+  min-height: 24px;
+
+  padding:
+    0 8px;
+
+  border-radius:
+    999px;
+
+  color:
+    #ffffff;
+
+  background:
+    var(--live-live);
+
+  font-size: 8px;
+  font-weight: 800;
+}
+
+
+.live-now-match-live i {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
+  background:
+    currentColor;
+}
+
+
+/* TEAMS */
+
+.live-now-match-main {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: 18px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+
+.live-now-team {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  min-width: 0;
+}
+
+
+.live-now-team.is-away {
+  flex-direction:
+    row-reverse;
+
+  text-align: right;
+}
+
+
+.live-now-team-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 34px;
+  height: 34px;
+
+  min-width: 34px;
+
+  flex:
+    0 0 34px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255,255,255,.08);
+
+  border-radius: 50%;
+
+  background:
+    rgba(255,255,255,.04);
+}
+
+
+.live-now-team-logo img {
+  display: block;
+
+  width: 27px;
+  height: 27px;
+
+  object-fit: contain;
+}
+
+
+.live-now-team-logo span {
+  color:
+    var(--live-violet-soft);
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+
+.live-now-team > strong {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color:
+    var(--live-text);
+
+  font-size: 14px;
+  font-weight: 750;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* CENTER */
+
+.live-now-match-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 2px;
+
+  min-width: 72px;
+}
+
+
+.live-now-match-center > span {
+  color:
+    var(--live-muted);
+
+  font-size: 9px;
+  font-weight: 700;
+}
+
+
+.live-now-match-center > strong {
+  color:
+    var(--live-violet-soft);
+
+  font-size: 15px;
+  font-weight: 850;
+}
+
+
+.live-now-score {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  color:
+    var(--live-text) !important;
+
+  font-size: 20px !important;
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+
+.live-now-score i {
+  color:
+    var(--live-muted);
+
+  font-style: normal;
+}
+
+
+/* FOOTER */
+
+.live-now-match-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  padding-top: 6px;
+
+  border-top:
+    1px solid
+    rgba(255,255,255,.055);
+
+  color:
+    var(--live-muted);
+
+  font-size: 8px;
+}
+
+
+.live-now-match-footer span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   MOBILE LANDSCAPE
+   ========================================================= */
+
+@media
+  (max-width: 950px)
+  and (orientation: landscape) {
+
+  .live-now.has-sport-match {
+    padding:
+      5px 8px 6px;
+  }
+
+  .live-now-match {
+    gap: 4px;
+  }
+
+  .live-now-match-head {
+    gap: 6px;
+  }
+
+  .live-now-match-league img {
+    width: 18px;
+    height: 18px;
+
+    flex-basis: 18px;
+  }
+
+  .live-now-match-league span {
+    font-size: 6px;
+  }
+
+  .live-now-match-league strong {
+    font-size: 8px;
+  }
+
+  .live-now-countdown {
+    gap: 4px;
+  }
+
+  .live-now-countdown span {
+    font-size: 6px;
+  }
+
+  .live-now-countdown strong {
+    min-width: 55px;
+
+    font-size: 10px;
+  }
+
+  .live-now-match-main {
+    gap: 7px;
+  }
+
+  .live-now-team {
+    gap: 5px;
+  }
+
+  .live-now-team-logo {
+    width: 22px;
+    height: 22px;
+
+    min-width: 22px;
+
+    flex-basis: 22px;
+  }
+
+  .live-now-team-logo img {
+    width: 18px;
+    height: 18px;
+  }
+
+  .live-now-team > strong {
+    font-size: 8px;
+  }
+
+  .live-now-match-center {
+    min-width: 45px;
+  }
+
+  .live-now-match-center > span {
+    font-size: 7px;
+  }
+
+  .live-now-match-center > strong {
+    font-size: 10px;
+  }
+
+  .live-now-score {
+    gap: 4px;
+
+    font-size:
+      12px !important;
+  }
+
+  .live-now-match-footer {
+    padding-top: 3px;
+
+    font-size: 6px;
+  }
+
+  .live-now-match-live {
+    min-height: 18px;
+
+    padding:
+      0 6px;
+
+    font-size: 6px;
+  }
+}

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { Lock, User, ArrowRight, Loader2, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 
 const TMDB_API_KEY = "7b311a6f43090b24f188272bcc0655b3";
@@ -17,7 +16,6 @@ interface MediaItem {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const carouselRef = useRef<HTMLDivElement>(null);
 
   // Données TMDB
@@ -130,17 +128,9 @@ export default function LoginPage() {
 
       if (res.ok && data.success) {
         // Enregistrement des données utilisateur locales
-        localStorage.setItem(
-          "gtv_xtream_credentials",
-          JSON.stringify({
-            username,
-            password,
-            userInfo: data.user,
-          })
-        );
-
-        router.push("/");
-        router.refresh();
+        try { localStorage.removeItem('gtv_xtream_credentials'); } catch {}
+        setPassword('');
+        window.location.replace("/");
       } else {
         setError(data.error || "Identifiants incorrects ou compte expiré.");
       }

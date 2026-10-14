@@ -1,719 +1,5152 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import {
-  ArrowLeft,
-  Clapperboard,
-  Clock,
+  useParams,
+  useRouter,
+} from "next/navigation";
+
+import {
   Film,
   Heart,
-  Maximize,
   Play,
-  Plus,
   Star,
-  Trophy,
   User,
   X,
 } from "lucide-react";
-import { AnimatePresence, motion, type Transition } from "framer-motion";
+
+import {
+  AnimatePresence,
+  motion,
+} from "framer-motion";
 
 import { SmartImage } from "@/components/ui/SmartImage";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { VideoPlayer } from "@/components/player/VideoPlayer";
+
 import { useSeriesInfo } from "@/lib/hooks";
 import { useLibrary } from "@/store/library";
-import { cleanName, cn, ratingNum, yearFrom } from "@/lib/utils";
+
+import {
+  cleanName,
+  cn,
+  ratingNum,
+  yearFrom,
+} from "@/lib/utils";
+
 import type { Episode } from "@/lib/xtream/types";
 
-/* =========================================================
-   CONFIG & TRANSITIONS
-========================================================= */
-
-const SERIES_CATEGORIES_ROUTE = "/series";
-const SEASON_WHEEL_HEIGHT = 190;
-const SEASON_ITEM_HEIGHT = 46;
-
-const smoothTransition: Transition = {
-  duration: 0.55,
-  ease: [0.16, 1, 0.3, 1],
-};
-
-const blurTransition: Transition = {
-  duration: 0.5,
-  ease: [0.16, 1, 0.3, 1],
-};
+const VideoPlayer = dynamic(
+  () =>
+    import(
+      "@/components/player/VideoPlayer"
+    ).then(
+      (mod) =>
+        mod.VideoPlayer
+    ),
+  {
+    ssr: false,
+  }
+);
 
 /* =========================================================
    TYPES
 ========================================================= */
 
-type SeasonArtwork = { poster: string | null; name: string; episodeCount?: number; };
-type FanartData = { logo?: string | null; backdrop?: string | null; poster?: string | null; seasons?: Record<string, SeasonArtwork>; };
-type DirectorData = { photoUrl: string | null; bio: string; awards?: string | null; knownFor?: Array<{ title: string; poster: string; }>; };
-type ActorMiniData = { name: string; photoUrl: string | null; bio: string; };
-type ProductionCompany = { id: number; name: string; logo: string | null };
-type ProducerData = { id: number; name: string; job: string; };
+type ScreenMode =
+  | "desktop"
+  | "portrait"
+  | "landscape";
+
+type SeasonArtwork = {
+  poster: string | null;
+  name: string;
+  episodeCount?: number;
+};
+
+type FanartData = {
+  logo?: string | null;
+  backdrop?: string | null;
+  poster?: string | null;
+
+  seasons?: Record<
+    string,
+    SeasonArtwork
+  >;
+};
+
+type ActorMiniData = {
+  name: string;
+  photoUrl: string | null;
+  bio: string;
+};
+
+type ProductionCompany = {
+  id?: number;
+  name: string;
+  logo?: string | null;
+  logoPath?: string | null;
+};
+
+type ProducerData = {
+  id?: number;
+  name: string;
+  job?: string;
+  department?: string;
+};
 
 type ProductionDetails = {
-  studio: string | null;
-  studioLogo: string | null;
-  companies: ProductionCompany[];
-  producers: ProducerData[];
-  overview: string | null;
+  studio?: string | null;
+  studioLogo?: string | null;
+  companies?: ProductionCompany[];
+  producers?: ProducerData[];
+  overview?: string | null;
 };
 
 /* =========================================================
-   HOOKS API (OPTIMISÉS ANTI-FLASH)
+   ANIMATIONS
 ========================================================= */
 
-function useTitleLogo(tmdbId?: string | number, title?: string, type: "movie" | "tv" = "tv") {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+const smoothTransition = {
+  duration: 0.34,
+
+  ease: [
+    0.16,
+    1,
+    0.3,
+    1,
+  ] as [
+    number,
+    number,
+    number,
+    number,
+  ],
+};
+
+const appleTransition = {
+  duration: 0.18,
+
+  ease: [
+    0.22,
+    1,
+    0.36,
+    1,
+  ] as [
+    number,
+    number,
+    number,
+    number,
+  ],
+};
+
+/* =========================================================
+   PERSON CACHE
+========================================================= */
+
+const personCache =
+  new Map<
+    string,
+    ActorMiniData
+  >();
+
+const personPending =
+  new Map<
+    string,
+    Promise<ActorMiniData>
+  >();
+
+/* =========================================================
+   EPISODE IMAGE CACHE
+========================================================= */
+
+const episodeImageCache =
+  new Map<
+    string,
+    string | null
+  >();
+
+const episodeImagePending =
+  new Map<
+    string,
+    Promise<string | null>
+  >();
+
+/* =========================================================
+   GENERIC HELPERS
+========================================================= */
+
+function safeImage(
+  value?: string | null
+): string | undefined {
+  if (
+    !value ||
+    typeof value !==
+      "string"
+  ) {
+    return undefined;
+  }
+
+  const clean =
+    value.trim();
+
+  if (
+    !clean ||
+    clean === "null" ||
+    clean ===
+      "undefined"
+  ) {
+    return undefined;
+  }
+
+  if (
+    clean.startsWith("/")
+  ) {
+    return `https://image.tmdb.org/t/p/original${clean}`;
+  }
+
+  return clean;
+}
+
+function durationToSeconds(
+  value: unknown
+) {
+  if (
+    value == null
+  ) {
+    return 0;
+  }
+
+  if (
+    typeof value ===
+    "number"
+  ) {
+    return Number.isFinite(
+      value
+    )
+      ? Math.max(
+          0,
+          value
+        )
+      : 0;
+  }
+
+  const text =
+    String(
+      value
+    ).trim();
+
+  if (!text) {
+    return 0;
+  }
+
+  if (
+    /^\d+(\.\d+)?$/.test(
+      text
+    )
+  ) {
+    const number =
+      Number(text);
+
+    return Number.isFinite(
+      number
+    )
+      ? number
+      : 0;
+  }
+
+  const parts =
+    text
+      .split(":")
+      .map(Number);
+
+  if (
+    parts.length === 3 &&
+    parts.every(
+      Number.isFinite
+    )
+  ) {
+    return (
+      parts[0] *
+        3600 +
+      parts[1] *
+        60 +
+      parts[2]
+    );
+  }
+
+  if (
+    parts.length === 2 &&
+    parts.every(
+      Number.isFinite
+    )
+  ) {
+    return (
+      parts[0] *
+        60 +
+      parts[1]
+    );
+  }
+
+  return 0;
+}
+
+/* =========================================================
+   SCREEN MODE
+   EXACT LOGIC FROM MOVIES
+========================================================= */
+
+function useScreenMode(
+  fullscreen: boolean
+) {
+  const [
+    mode,
+    setMode,
+  ] =
+    useState<
+      ScreenMode | null
+    >(null);
 
   useEffect(() => {
-    if (!tmdbId && !title) return;
-    let mounted = true;
-    
-    const query = new URLSearchParams();
-    if (tmdbId && String(tmdbId) !== "0") query.append("tmdbId", String(tmdbId));
-    if (title) query.append("title", title);
-    query.append("type", type);
+    const desktop =
+      window.matchMedia(
+        "(min-width: 1180px)"
+      );
 
-    fetch(`/api/title-logo?${query.toString()}`)
-      .then((res) => res.json())
-      .then((data) => { if (mounted && data?.logoUrl) setLogoUrl(data.logoUrl); })
-      .catch(() => {});
-    return () => { mounted = false; };
-  }, [tmdbId, title, type]);
+    const portrait =
+      window.matchMedia(
+        "(orientation: portrait)"
+      );
+
+    const update =
+      () => {
+        /*
+         * IMPORTANT :
+         * on ne change pas
+         * le layout pendant
+         * le fullscreen player.
+         */
+        if (
+          fullscreen ||
+          document.fullscreenElement
+        ) {
+          return;
+        }
+
+        if (
+          desktop.matches
+        ) {
+          setMode(
+            "desktop"
+          );
+
+          return;
+        }
+
+        setMode(
+          portrait.matches
+            ? "portrait"
+            : "landscape"
+        );
+      };
+
+    update();
+
+    document.addEventListener(
+      "fullscreenchange",
+      update
+    );
+
+    desktop.addEventListener(
+      "change",
+      update
+    );
+
+    portrait.addEventListener(
+      "change",
+      update
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        update
+      );
+
+      desktop.removeEventListener(
+        "change",
+        update
+      );
+
+      portrait.removeEventListener(
+        "change",
+        update
+      );
+    };
+  }, [
+    fullscreen,
+  ]);
+
+  return mode;
+}
+
+/* =========================================================
+   APPLE / SAFARI LITE
+   MOVIES
+========================================================= */
+
+function useAppleSafariLiteMode() {
+  const [
+    liteMode,
+    setLiteMode,
+  ] =
+    useState(false);
+
+  useEffect(() => {
+    const ua =
+      navigator.userAgent;
+
+    const platform =
+      navigator.platform;
+
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(
+        ua
+      ) ||
+      (
+        platform ===
+          "MacIntel" &&
+        navigator.maxTouchPoints >
+          1
+      );
+
+    const isSafari =
+      /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(
+        ua
+      );
+
+    setLiteMode(
+      isIOS ||
+        isSafari
+    );
+  }, []);
+
+  return liteMode;
+}
+
+/* =========================================================
+   PERSON LOADER
+========================================================= */
+
+async function loadPerson(
+  name: string
+): Promise<ActorMiniData> {
+  const cleanPersonName =
+    name.trim();
+
+  const cached =
+    personCache.get(
+      cleanPersonName
+    );
+
+  if (cached) {
+    return cached;
+  }
+
+  const pending =
+    personPending.get(
+      cleanPersonName
+    );
+
+  if (pending) {
+    return pending;
+  }
+
+  const request =
+    fetch(
+      `/api/actor-photo?name=${encodeURIComponent(
+        cleanPersonName
+      )}`
+    )
+      .then(
+        async (
+          response
+        ) => {
+          const json =
+            await response
+              .json()
+              .catch(
+                () =>
+                  ({})
+              );
+
+          const result:
+            ActorMiniData =
+            {
+              name:
+                cleanPersonName,
+
+              photoUrl:
+                safeImage(
+                  json?.photoUrl
+                ) ||
+                null,
+
+              bio:
+                String(
+                  json?.bio ||
+                    json?.biography ||
+                    ""
+                ),
+            };
+
+          personCache.set(
+            cleanPersonName,
+            result
+          );
+
+          return result;
+        }
+      )
+      .catch(
+        () => {
+          const result:
+            ActorMiniData =
+            {
+              name:
+                cleanPersonName,
+
+              photoUrl:
+                null,
+
+              bio:
+                "",
+            };
+
+          personCache.set(
+            cleanPersonName,
+            result
+          );
+
+          return result;
+        }
+      )
+      .finally(
+        () => {
+          personPending.delete(
+            cleanPersonName
+          );
+        }
+      );
+
+  personPending.set(
+    cleanPersonName,
+    request
+  );
+
+  return request;
+}
+
+/* =========================================================
+   SERIES TITLE LOGO
+========================================================= */
+
+function useTitleLogo(
+  tmdbId?:
+    | string
+    | number,
+  title?: string
+) {
+  const [
+    logoUrl,
+    setLogoUrl,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  useEffect(() => {
+    if (
+      !tmdbId &&
+      !title
+    ) {
+      return;
+    }
+
+    let mounted =
+      true;
+
+    const query =
+      new URLSearchParams();
+
+    if (
+      tmdbId &&
+      String(
+        tmdbId
+      ) !== "0"
+    ) {
+      query.append(
+        "tmdbId",
+        String(
+          tmdbId
+        )
+      );
+    }
+
+    if (title) {
+      query.append(
+        "title",
+        title
+      );
+    }
+
+    query.append(
+      "type",
+      "tv"
+    );
+
+    fetch(
+      `/api/title-logo?${query.toString()}`
+    )
+      .then(
+        (
+          response
+        ) =>
+          response.json()
+      )
+      .then(
+        (
+          data
+        ) => {
+          if (
+            mounted &&
+            data?.logoUrl
+          ) {
+            setLogoUrl(
+              data.logoUrl
+            );
+          }
+        }
+      )
+      .catch(
+        () => {}
+      );
+
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    tmdbId,
+    title,
+  ]);
 
   return logoUrl;
 }
 
-function useProductionDetails(tmdbId?: string | number, title?: string, type: "movie" | "tv" = "tv") {
-  const [details, setDetails] = useState<ProductionDetails | null>(null);
-  const [loading, setLoading] = useState(true); // On commence en "chargement" pour bloquer le flash
+/* =========================================================
+   SERIES FANART
+========================================================= */
+
+function useFanartSeries(
+  tmdbId?:
+    | string
+    | number
+) {
+  const [
+    data,
+    setData,
+  ] =
+    useState<FanartData>(
+      {}
+    );
 
   useEffect(() => {
-    if ((!tmdbId || String(tmdbId) === "0") && !title) {
-      setLoading(false);
+    if (
+      !tmdbId ||
+      String(
+        tmdbId
+      ) === "0"
+    ) {
       return;
     }
-    
-    let mounted = true;
-    setLoading(true); // Début du fetch TMDB
-    
-    const query = new URLSearchParams();
-    if (tmdbId && String(tmdbId) !== "0") query.append("tmdbId", String(tmdbId));
-    if (title) query.append("title", title);
-    query.append("type", type);
 
-    fetch(`/api/tmdb/movie-production?${query.toString()}`)
-      .then((res) => res.json())
-      .then((data) => { 
-        if (mounted && !data.error) {
-          setDetails({
-            studio: data.studio,
-            studioLogo: data.studioLogo,
-            companies: data.companies || [],
-            producers: data.producers || [],
-            overview: data.overview || null,
-          });
+    let mounted =
+      true;
+
+    fetch(
+      `/api/fanart/series?tmdbId=${encodeURIComponent(
+        String(
+          tmdbId
+        )
+      )}`
+    )
+      .then(
+        (
+          response
+        ) =>
+          response.json()
+      )
+      .then(
+        (
+          json
+        ) => {
+          if (
+            mounted
+          ) {
+            setData(
+              json ||
+                {}
+            );
+          }
         }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (mounted) setLoading(false); // TMDB a fini, on peut libérer l'affichage de la bio
-      });
-      
-    return () => { mounted = false; };
-  }, [tmdbId, title, type]);
+      )
+      .catch(
+        () => {}
+      );
 
-  return { details, loading };
-}
-
-function useFanartSeries(tmdbId?: string | number) {
-  const [data, setData] = useState<FanartData>({});
-
-  useEffect(() => {
-    if (!tmdbId || String(tmdbId) === "0") return;
-    let mounted = true;
-    fetch(`/api/fanart/series?tmdbId=${tmdbId}`)
-      .then((res) => res.json())
-      .then((json) => { if (mounted) setData(json || {}); })
-      .catch(() => {});
-    return () => { mounted = false; };
-  }, [tmdbId]);
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    tmdbId,
+  ]);
 
   return data;
 }
 
 /* =========================================================
-   HELPERS & COMPOSANTS ENFANTS
+   PRODUCTION DETAILS
 ========================================================= */
 
-function parseDurationToSeconds(value: unknown): number {
-  if (value == null) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const text = String(value).trim();
-  if (!text) return 0;
-  if (/^\d+(\.\d+)?$/.test(text)) { const val = Number(text); return Number.isFinite(val) ? val : 0; }
-  const parts = text.split(":").map(Number);
-  if (parts.length === 3 && parts.every(Number.isFinite)) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2 && parts.every(Number.isFinite)) return parts[0] * 60 + parts[1];
-  return 0;
-}
+function useProductionDetails(
+  tmdbId?:
+    | string
+    | number,
+  title?: string
+) {
+  const [
+    details,
+    setDetails,
+  ] =
+    useState<
+      ProductionDetails | null
+    >(null);
 
-function formatDuration(seconds: number) {
-  if (!seconds || seconds <= 0) return "";
-  const total = Math.round(seconds);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  if (hours > 0) return `${hours} h ${minutes} min`;
-  return `${minutes} min`;
-}
-
-// Composant de Biographie (Corrigé avec loader élégant)
-function DirectorShowcase({ name, backdrop, isTmdbLoading }: { name?: string; backdrop?: string | null; isTmdbLoading?: boolean; }) {
-  const [data, setData] = useState<DirectorData | null>(null);
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
 
   useEffect(() => {
-    if (!name) { setData(null); return; }
-    let mounted = true;
-    fetch(`/api/actor-photo?name=${encodeURIComponent(name)}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (!mounted) return;
-        let parsedKnownFor: DirectorData["knownFor"] = [];
-        if (Array.isArray(json?.knownFor)) parsedKnownFor = json.knownFor;
-        else if (Array.isArray(json?.movies)) parsedKnownFor = json.movies;
+    if (
+      (
+        !tmdbId ||
+        String(
+          tmdbId
+        ) === "0"
+      ) &&
+      !title
+    ) {
+      setLoading(
+        false
+      );
 
-        setData({
-          photoUrl: json?.photoUrl || null,
-          bio: json?.bio || "",
-          awards: json?.awards || null,
-          knownFor: parsedKnownFor,
-        });
-      })
-      .catch(() => {});
-    return () => { mounted = false; };
-  }, [name]);
+      return;
+    }
 
-  // Si on attend encore la réponse TMDB, on affiche un design Premium de chargement
-  if (isTmdbLoading) {
-    return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden bg-[#07070a]">
-        {backdrop && <img src={backdrop} alt="" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-10 blur-[30px] saturate-50" />}
-        <div className="relative z-10 w-8 h-8 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" />
-      </div>
+    let mounted =
+      true;
+
+    setLoading(
+      true
     );
-  }
 
-  return (
-    <div className="absolute inset-0 flex flex-col justify-center overflow-hidden bg-[#07070a] transition-colors duration-500">
-      {backdrop && <img src={backdrop} alt="" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-15 blur-[25px] saturate-50" />}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#07070a] via-[#07070a]/80 to-transparent" />
+    const query =
+      new URLSearchParams();
 
-      {name ? (
-        <div className="relative z-10 flex h-full w-full max-w-full flex-col justify-center p-6 lg:p-8">
-          <div className="flex items-center gap-6">
-            <div className="h-[90px] w-[90px] shrink-0 overflow-hidden rounded-[22px] border border-white/10 bg-white/5 shadow-2xl sm:h-[110px] sm:w-[110px]">
-              {data?.photoUrl ? (
-                <img src={data.photoUrl} alt={name} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center"><User className="h-8 w-8 text-white/20" /></div>
-              )}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-[#d8ccff]/70">Créateur / Réalisateur</p>
-              <h3 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-md sm:text-3xl">{name}</h3>
-              {data?.awards && (
-                <div className="mt-2.5 flex w-fit items-start gap-2 rounded-lg border border-white/5 bg-white/5 px-3 py-1.5 text-white/65">
-                  <Trophy className="h-4 w-4 shrink-0 text-yellow-500/90" />
-                  <p className="line-clamp-1 text-[11px] font-medium leading-snug sm:text-xs">{data.awards}</p>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="mt-6">
-            <p className="line-clamp-3 text-[13px] leading-relaxed text-white/60 sm:text-sm">{data?.bio || "Biographie indisponible."}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="relative z-10 flex h-full flex-col items-center justify-center opacity-40">
-          <Film className="mb-4 h-12 w-12 text-white/30" />
-          <p className="text-sm font-medium text-center">Sélectionnez une saison pour<br/>voir les épisodes.</p>
-        </div>
-      )}
-    </div>
+    if (
+      tmdbId &&
+      String(
+        tmdbId
+      ) !== "0"
+    ) {
+      query.append(
+        "tmdbId",
+        String(
+          tmdbId
+        )
+      );
+    }
+
+    if (title) {
+      query.append(
+        "title",
+        title
+      );
+    }
+
+    query.append(
+      "type",
+      "tv"
+    );
+
+    fetch(
+      `/api/tmdb/movie-production?${query.toString()}`
+    )
+      .then(
+        (
+          response
+        ) =>
+          response.json()
+      )
+      .then(
+        (
+          data
+        ) => {
+          if (
+            mounted &&
+            !data?.error
+          ) {
+            setDetails({
+              studio:
+                data.studio ||
+                null,
+
+              studioLogo:
+                data.studioLogo ||
+                null,
+
+              companies:
+                data.companies ||
+                [],
+
+              producers:
+                data.producers ||
+                [],
+
+              overview:
+                data.overview ||
+                null,
+            });
+          }
+        }
+      )
+      .catch(
+        () => {}
+      )
+      .finally(
+        () => {
+          if (
+            mounted
+          ) {
+            setLoading(
+              false
+            );
+          }
+        }
+      );
+
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    tmdbId,
+    title,
+  ]);
+
+  return {
+    details,
+    loading,
+  };
+}
+
+/* =========================================================
+   EPISODE ARTWORK
+========================================================= */
+
+function makeEpisodeImageKey({
+  tmdbId,
+  seriesTitle,
+  season,
+  episode,
+}: {
+  tmdbId?:
+    | string
+    | number;
+
+  seriesTitle:
+    string;
+
+  season:
+    string;
+
+  episode:
+    | string
+    | number;
+}) {
+  return [
+    tmdbId ||
+      "",
+    seriesTitle,
+    season,
+    episode,
+  ].join(
+    "::"
   );
 }
 
-function ActorMini({ name, active, compact, onSelect }: { name: string; active: boolean; compact: boolean; onSelect: (data: ActorMiniData) => void; }) {
-  const [data, setData] = useState<ActorMiniData>({ name, photoUrl: null, bio: "" });
+async function loadEpisodeImage({
+  tmdbId,
+  seriesTitle,
+  season,
+  episode,
+}: {
+  tmdbId?:
+    | string
+    | number;
+
+  seriesTitle:
+    string;
+
+  season:
+    string;
+
+  episode:
+    | string
+    | number;
+}) {
+  const key =
+    makeEpisodeImageKey({
+      tmdbId,
+      seriesTitle,
+      season,
+      episode,
+    });
+
+  if (
+    episodeImageCache.has(
+      key
+    )
+  ) {
+    return (
+      episodeImageCache.get(
+        key
+      ) ||
+      null
+    );
+  }
+
+  const pending =
+    episodeImagePending.get(
+      key
+    );
+
+  if (pending) {
+    return pending;
+  }
+
+  const request =
+    fetch(
+      `/api/episode-image?tmdbId=${encodeURIComponent(
+        String(
+          tmdbId ||
+            ""
+        )
+      )}&show=${encodeURIComponent(
+        seriesTitle
+      )}&season=${encodeURIComponent(
+        season
+      )}&episode=${encodeURIComponent(
+        String(
+          episode
+        )
+      )}`
+    )
+      .then(
+        async (
+          response
+        ) => {
+          const json =
+            await response
+              .json()
+              .catch(
+                () =>
+                  ({})
+              );
+
+          const imageUrl =
+            typeof json?.imageUrl ===
+              "string" &&
+            json.imageUrl.trim()
+              ? json.imageUrl
+              : null;
+
+          episodeImageCache.set(
+            key,
+            imageUrl
+          );
+
+          return imageUrl;
+        }
+      )
+      .catch(
+        () => {
+          episodeImageCache.set(
+            key,
+            null
+          );
+
+          return null;
+        }
+      )
+      .finally(
+        () => {
+          episodeImagePending.delete(
+            key
+          );
+        }
+      );
+
+  episodeImagePending.set(
+    key,
+    request
+  );
+
+  return request;
+}
+
+/* =========================================================
+   EPISODE IMAGE
+   REAL SERIES SIGNATURE
+========================================================= */
+
+function EpisodeImage({
+  ep,
+  seriesTitle,
+  tmdbId,
+  seasonKey,
+  fallbackCover,
+}: {
+  ep: any;
+
+  seriesTitle:
+    string;
+
+  tmdbId?:
+    | string
+    | number;
+
+  seasonKey:
+    string;
+
+  fallbackCover?:
+    | string;
+}) {
+  const directImage =
+    ep.info
+      ?.movie_image ||
+    null;
+
+  const season =
+    seasonKey.replace(
+      /\D/g,
+      ""
+    ) ||
+    "1";
+
+  const episodeNumber =
+    ep.episode_num ||
+    ep.episode ||
+    "";
+
+  const cacheKey =
+    makeEpisodeImageKey({
+      tmdbId,
+      seriesTitle,
+      season,
+      episode:
+        episodeNumber,
+    });
+
+  const [
+    imgSrc,
+    setImgSrc,
+  ] =
+    useState<
+      string | null
+    >(
+      directImage ||
+        episodeImageCache.get(
+          cacheKey
+        ) ||
+        null
+    );
 
   useEffect(() => {
-    let mounted = true;
-    fetch(`/api/actor-photo?name=${encodeURIComponent(name)}`)
-      .then((res) => res.json())
-      .then((json) => { if (mounted) setData({ name, photoUrl: json?.photoUrl || null, bio: json?.bio || "" }); }).catch(() => {});
-    return () => { mounted = false; };
-  }, [name]);
+    if (
+      directImage
+    ) {
+      setImgSrc(
+        directImage
+      );
+
+      return;
+    }
+
+    const cached =
+      episodeImageCache.get(
+        cacheKey
+      );
+
+    if (cached) {
+      setImgSrc(
+        cached
+      );
+
+      return;
+    }
+
+    let mounted =
+      true;
+
+    loadEpisodeImage({
+      tmdbId,
+      seriesTitle,
+      season,
+      episode:
+        episodeNumber,
+    }).then(
+      (
+        imageUrl
+      ) => {
+        if (
+          mounted &&
+          imageUrl
+        ) {
+          setImgSrc(
+            imageUrl
+          );
+        }
+      }
+    );
+
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    cacheKey,
+    directImage,
+    episodeNumber,
+    season,
+    seriesTitle,
+    tmdbId,
+  ]);
 
   return (
-    <motion.button layout transition={smoothTransition} type="button" draggable={false} onClick={() => onSelect(data)} className={cn("group relative shrink-0 overflow-hidden rounded-[14px] border select-none backdrop-blur-xl transition-colors duration-300", compact ? "w-[54px] sm:w-[60px] aspect-[3/4]" : "w-[64px] sm:w-[74px] aspect-[3/4]", active ? "border-[#d8ccff]/50 bg-[#d8ccff]/10 shadow-[0_12px_35px_rgba(170,145,255,.16)]" : "border-white/10 bg-white/[0.035] hover:border-white/20")}>
-      {data.photoUrl ? <img src={data.photoUrl} alt={name} draggable={false} className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover" /> : <div className="absolute inset-0 grid place-items-center"><User className="h-5 w-5 text-white/20" /></div>}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent transition-opacity group-hover:opacity-80" />
-      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.11] to-transparent" />
-      {active && <motion.div layoutId="active-actor-outline" className="absolute inset-0 rounded-[14px] ring-1 ring-[#d8ccff]/60 shadow-[inset_0_0_24px_rgba(216,204,255,.12)]" />}
-      <p className="pointer-events-none absolute bottom-1.5 left-1.5 right-1.5 truncate text-[8.5px] font-medium text-white/85 sm:text-[9.5px]">{name}</p>
+    <SmartImage
+      src={
+        imgSrc ||
+        fallbackCover
+      }
+      alt={
+        ep.title ||
+        "Épisode"
+      }
+      rounded="rounded-none"
+      className="pointer-events-none h-full w-full object-cover"
+    />
+  );
+}
+
+/* =========================================================
+   DIRECTOR SHOWCASE
+   MOVIES — INCHANGÉ
+========================================================= */
+
+function DirectorShowcase({
+  portrait = false,
+  name,
+  backdrop,
+  onPlay,
+}: {
+  name?: string;
+  backdrop?: string;
+  onPlay: () => void;
+  portrait?: boolean;
+}) {
+  const [
+    data,
+    setData,
+  ] =
+    useState<
+      ActorMiniData | null
+    >(null);
+
+  useEffect(() => {
+    if (!name) {
+      setData(
+        null
+      );
+
+      return;
+    }
+
+    let mounted =
+      true;
+
+    loadPerson(
+      name
+    ).then(
+      (
+        person
+      ) => {
+        if (
+          mounted
+        ) {
+          setData(
+            person
+          );
+        }
+      }
+    );
+
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    name,
+  ]);
+
+  return (
+    <button
+      type="button"
+      onClick={
+        onPlay
+      }
+      className="
+        group
+        absolute
+        inset-0
+        overflow-hidden
+        bg-[#08080c]/88
+        text-left
+      "
+    >
+      {backdrop && (
+        <img
+          src={
+            backdrop
+          }
+          alt=""
+          draggable={
+            false
+          }
+          className="
+            absolute
+            inset-0
+            h-full
+            w-full
+            scale-[1.04]
+            object-cover
+            opacity-[0.24]
+          "
+        />
+      )}
+
+      <div className="absolute inset-0 bg-gradient-to-r from-black/98 via-black/90 to-black/45" />
+
+      <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/25" />
+
+      <div className="absolute inset-0 flex items-center px-[clamp(12px,3vw,38px)]">
+        <div className="flex min-w-0 flex-1 items-center gap-[clamp(10px,2vw,22px)]">
+          <div
+            className="
+              aspect-square
+              w-[clamp(48px,8vw,100px)]
+              shrink-0
+              overflow-hidden
+              rounded-[17px]
+              border
+              border-white/12
+              bg-[#111118]
+              shadow-[0_15px_45px_rgba(0,0,0,.45)]
+            "
+          >
+            {data?.photoUrl ? (
+              <img
+                src={
+                  data.photoUrl
+                }
+                alt={
+                  name ||
+                  ""
+                }
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="grid h-full w-full place-items-center">
+                <User className="h-[34%] w-[34%] text-white/20" />
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <p
+              className={cn(
+                "font-semibold uppercase tracking-[0.2em] text-[#d8ccff]/90",
+
+                portrait
+                  ? "text-[10px]"
+                  : "text-[clamp(5px,.7vw,9px)]"
+              )}
+            >
+              Réalisation
+            </p>
+
+            <h3 className="mt-1 truncate text-[clamp(14px,2vw,29px)] font-semibold tracking-[-0.03em] text-white">
+              {name ||
+                "Découvrir la série"}
+            </h3>
+
+<div className="mt-2 max-h-[92px] max-w-[500px] overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  <p
+    className={cn(
+      "leading-[1.55]",
+      portrait
+        ? "text-[12px] text-white/90"
+        : "text-[clamp(6px,.8vw,11px)] text-white/72"
+    )}
+  >
+    {data?.bio || "Biographie indisponible."}
+  </p>
+</div>
+          </div>
+        </div>
+
+        <div
+          className="
+            ml-3
+            grid
+            aspect-square
+            w-[clamp(40px,5vw,68px)]
+            shrink-0
+            place-items-center
+            rounded-full
+            border
+            border-white/30
+            bg-white/[0.13]
+            transition
+            duration-300
+            group-hover:scale-105
+          "
+        >
+          <Play className="ml-1 h-[42%] w-[42%] fill-white" />
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* =========================================================
+   ACTOR MINI
+   MOVIES
+========================================================= */
+
+function ActorMini({
+  name,
+  active,
+  compact,
+  portraitCompact = false,
+  landscapeCompact = false,
+  onSelect,
+}: {
+  name: string;
+
+  active: boolean;
+
+  compact: boolean;
+
+  portraitCompact?:
+    boolean;
+
+  landscapeCompact?:
+    boolean;
+
+  onSelect: (
+    actor:
+      ActorMiniData
+  ) => void;
+}) {
+  const [
+    data,
+    setData,
+  ] =
+    useState<ActorMiniData>(
+      () =>
+        personCache.get(
+          name
+        ) || {
+          name,
+          photoUrl:
+            null,
+          bio:
+            "",
+        }
+    );
+
+  useEffect(() => {
+    let mounted =
+      true;
+
+    loadPerson(
+      name
+    ).then(
+      (
+        person
+      ) => {
+        if (
+          mounted
+        ) {
+          setData(
+            person
+          );
+        }
+      }
+    );
+
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    name,
+  ]);
+
+  return (
+    <motion.button
+      layout={
+        !portraitCompact
+      }
+      transition={
+        smoothTransition
+      }
+      type="button"
+      draggable={
+        false
+      }
+      onClick={() =>
+        onSelect(
+          data
+        )
+      }
+      className={cn(
+        `
+        group
+        relative
+        shrink-0
+        overflow-hidden
+        border
+        select-none
+        transition-colors
+        duration-300
+        `,
+
+        landscapeCompact
+          ? "h-[54px] w-[42px] rounded-[9px]"
+          : portraitCompact
+            ? "aspect-[3/4] w-[48px] rounded-[11px]"
+            : compact
+              ? "aspect-[3/4] w-[54px] rounded-[14px] sm:w-[60px]"
+              : "aspect-[3/4] w-[64px] rounded-[14px] sm:w-[74px]",
+
+        active
+          ? `
+            border-[#d8ccff]/50
+            bg-[#d8ccff]/10
+            shadow-[0_12px_35px_rgba(170,145,255,.16)]
+          `
+          : `
+            border-white/10
+            bg-white/[0.035]
+            hover:border-white/20
+          `
+      )}
+    >
+      {data.photoUrl ? (
+        <img
+          src={
+            data.photoUrl
+          }
+          alt={
+            name
+          }
+          draggable={
+            false
+          }
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-[center_18%]"
+        />
+      ) : (
+        <div className="absolute inset-0 grid place-items-center bg-[#111118]">
+          <User className="h-5 w-5 text-white/20" />
+        </div>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/45 to-transparent px-1.5 pb-1.5 pt-5">
+        <p
+          className={cn(
+            "truncate text-center font-medium text-white",
+
+            landscapeCompact
+              ? "text-[5px]"
+              : portraitCompact
+                ? "text-[6px]"
+                : "text-[7px]"
+          )}
+        >
+          {name}
+        </p>
+      </div>
     </motion.button>
   );
 }
 
-function CastingShowcase({ actors, movieLogo, studio, studioLogo, companies, producers }: { actors: string[]; movieLogo?: string | null; studio?: string | null; studioLogo?: string | null; companies?: ProductionCompany[]; producers?: ProducerData[]; }) {
-  const [selected, setSelected] = useState<ActorMiniData | null>(null);
-  const railRef = useRef<HTMLDivElement>(null);
-  const mouseDown = useRef(false);
-  const dragged = useRef(false);
-  const startX = useRef(0);
-  const startScroll = useRef(0);
+/* =========================================================
+   CASTING SHOWCASE
+   MOVIES UI — NE PAS REDESSINER
+========================================================= */
 
-  const handleMouseDown = (e: React.MouseEvent) => { if (!railRef.current) return; mouseDown.current = true; dragged.current = false; startX.current = e.clientX; startScroll.current = railRef.current.scrollLeft; };
-  const handleMouseMove = (e: React.MouseEvent) => { if (!railRef.current || !mouseDown.current) return; const delta = e.clientX - startX.current; if (Math.abs(delta) > 5) dragged.current = true; if (dragged.current) { e.preventDefault(); railRef.current.scrollLeft = startScroll.current - delta * 1.15; } };
-  const stopMouseDrag = () => { mouseDown.current = false; setTimeout(() => { dragged.current = false; }, 70); };
-  const selectActor = (actor: ActorMiniData) => { if (dragged.current) return; if (selected?.name === actor.name) { setSelected(null); return; } setSelected(actor); };
+function CastingShowcase({
+  actors,
+  movieLogo,
+  studio,
+  studioLogo,
+  companies,
+  producers,
 
-  const companyNames = Array.isArray(companies) ? companies.map((c) => c?.name).filter(Boolean).slice(0, 4) : [];
-  const producerNames = Array.isArray(producers) ? producers.filter(p => ["Producer", "Executive Producer"].includes(p.job)).map((p) => p?.name).filter(Boolean).slice(0, 2) : [];
+  portraitCompact = false,
+  compactLandscape = false,
 
-  return (
-    <div className="border-t border-white/[0.07] pt-5 mt-10 w-full">
-      <div className="mb-3 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#d8ccff] shadow-[0_0_14px_rgba(216,204,255,.8)]" /><p className="text-[9px] font-semibold uppercase tracking-[0.24em] text-white/45">Casting / Acteurs</p></div>
-      <motion.div layout transition={smoothTransition} className="relative flex flex-col lg:flex-row items-stretch overflow-hidden rounded-[20px] border border-white/[0.10] bg-white/[0.02] p-2.5 backdrop-blur-xl sm:p-3">
-        <motion.div layout transition={smoothTransition} className={cn("relative flex min-w-0 items-center overflow-hidden", selected ? "w-full lg:w-[46%]" : "w-full lg:w-[65%]")}>
-          <div className="relative flex min-w-0 w-full items-center overflow-hidden">
-            {movieLogo && (<div className="sticky left-0 z-30 mr-2 flex h-[64px] w-[75px] shrink-0 items-center justify-center border-r border-white/10 bg-[#0d0d12]/95 pr-3 shadow-[15px_0_20px_-10px_rgba(0,0,0,0.6)] backdrop-blur-md sm:h-[74px] sm:w-[95px]"><img src={movieLogo} alt="Logo" className="pointer-events-none max-h-[45px] max-w-full object-contain opacity-90 drop-shadow-md" /></div>)}
-            <div ref={railRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={stopMouseDrag} onMouseLeave={stopMouseDrag} style={{ WebkitOverflowScrolling: "touch" }} className="relative z-10 flex min-w-0 w-full items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-none select-none cursor-grab active:cursor-grabbing">
-              {actors.map((actor) => <ActorMini key={actor} name={actor} compact={!!selected} active={selected?.name === actor} onSelect={selectActor} />)}
-            </div>
-            <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-20 w-10 bg-gradient-to-l from-[#060608] to-transparent" />
-          </div>
-        </motion.div>
-        <AnimatePresence mode="popLayout">
-          {selected ? (
-            <motion.div layout key="bio" initial={{ opacity: 0, x: 20, filter: "blur(4px)" }} animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} exit={{ opacity: 0, x: 20, filter: "blur(4px)" }} transition={smoothTransition} className="relative mt-4 lg:mt-0 lg:ml-4 min-h-[140px] w-full lg:w-[54%] overflow-hidden rounded-[16px] border border-white/[0.11] bg-[#0d0d12]/90">
-              {selected.photoUrl && <motion.img key={selected.photoUrl} initial={{ opacity: 0, x: 50, scale: 1.1 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }} src={selected.photoUrl} alt={selected.name} className="absolute right-0 top-0 h-full w-[52%] object-cover" />}
-              <div className="pointer-events-none absolute right-0 top-0 h-full w-[52%] bg-gradient-to-br from-white/[0.10] via-transparent to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#101015] via-[#101015]/98 via-[52%] to-transparent" />
-              <motion.div key={`${selected.name}-text`} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.07, ...smoothTransition }} className="relative z-10 max-w-[70%] lg:max-w-[62%] p-4 sm:p-5">
-                <p className="text-[8px] uppercase tracking-[0.25em] text-[#d8ccff]/75">Distribution</p>
-                <h3 className="mt-0.5 text-base font-semibold tracking-tight sm:text-lg">{selected.name}</h3>
-                <p className="mt-2 line-clamp-3 text-[10px] leading-relaxed text-white/50 sm:text-[11px]">{selected.bio || "Biographie indisponible."}</p>
-              </motion.div>
-              <button type="button" onClick={() => setSelected(null)} className="absolute right-2 top-2 z-20 grid h-7 w-7 place-items-center rounded-full border border-white/10 bg-black/30 text-white/45 backdrop-blur-xl transition hover:bg-white/10 hover:text-white"><X className="h-3 w-3" /></button>
-            </motion.div>
-          ) : (
-            <motion.div layout key="production" initial={{ opacity: 0, filter: "blur(5px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0, filter: "blur(5px)" }} transition={smoothTransition} className="hidden w-[35%] flex-col justify-center border-l border-white/5 pl-4 pr-6 lg:flex">
-              <div className="flex items-center justify-end gap-4">
-                <div className="min-w-0 flex-1 text-right">
-                  <p className="mb-1 text-[8px] font-semibold uppercase tracking-[0.3em] text-[#d8ccff]/70">Production & Studios</p>
-                  <h4 className="truncate text-sm font-bold text-white">{studio || "Production non renseignée"}</h4>
-                  {companyNames.length > 1 && <p className="mt-1 line-clamp-1 text-[9px] text-white/35">{companyNames.slice(1).join(" · ")}</p>}
-                  {producerNames.length > 0 && <p className="mt-1 line-clamp-1 text-[9px] text-white/25">Prod. {producerNames.join(", ")}</p>}
-                </div>
-                <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/15 bg-white p-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]">
-                  {studioLogo ? <img src={studioLogo} alt={studio || "Studio"} className="h-full w-full object-contain filter brightness-0 opacity-80" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} /> : <Film className="h-6 w-6 text-black/40" />}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
+  appleLiteMode = false,
+
+  onActorOpenChange,
+}: {
+  actors: string[];
+
+  movieLogo?:
+    | string
+    | null;
+
+  studio?:
+    | string
+    | null;
+
+  studioLogo?:
+    | string
+    | null;
+
+  companies?:
+    ProductionCompany[];
+
+  producers?:
+    ProducerData[];
+
+  portraitCompact?:
+    boolean;
+
+  compactLandscape?:
+    boolean;
+
+  appleLiteMode?:
+    boolean;
+
+  onActorOpenChange?: (
+    open: boolean
+  ) => void;
+}) {
+  const [
+    selected,
+    setSelected,
+  ] =
+    useState<ActorMiniData | null>(
+      null
+    );
+
+  const [
+    selectedIndex,
+    setSelectedIndex,
+  ] =
+    useState(-1);
+
+  const [
+    swipeDirection,
+    setSwipeDirection,
+  ] =
+    useState<
+      -1 | 0 | 1
+    >(0);
+
+  const actorRequest =
+    useRef(0);
+
+  useEffect(
+    () => () => {
+      actorRequest.current +=
+        1;
+    },
+    []
   );
-}
 
-function SeasonWheel({ seasons, activeSeasonKey, onSelect }: { seasons: string[]; activeSeasonKey: string | null; onSelect: (season: string) => void; }) {
-  const wheelRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mouseDown = useRef(false);
-  const didDrag = useRef(false);
-  const startY = useRef(0);
-  const startScroll = useRef(0);
-  const initialized = useRef(false);
+  const railRef =
+    useRef<HTMLDivElement>(
+      null
+    );
 
-  const padding = (SEASON_WHEEL_HEIGHT - SEASON_ITEM_HEIGHT) / 2;
-  const normalizeSeason = (season: string) => season.replace(/\D/g, "") || season;
+  const mouseDown =
+    useRef(false);
 
-  const centerSeason = (season: string, behavior: ScrollBehavior = "smooth") => {
-    const wheel = wheelRef.current;
-    const item = itemRefs.current[season];
-    if (!wheel || !item) return;
-    const top = item.offsetTop - wheel.clientHeight / 2 + item.clientHeight / 2;
-    wheel.scrollTo({ top, behavior });
-  };
+  const dragged =
+    useRef(false);
 
-  const findCenteredSeason = () => {
-    const wheel = wheelRef.current;
-    if (!wheel) return null;
-    const center = wheel.scrollTop + wheel.clientHeight / 2;
-    let result: string | null = null;
-    let distance = Infinity;
-    for (const season of seasons) {
-      const item = itemRefs.current[season];
-      if (!item) continue;
-      const itemCenter = item.offsetTop + item.clientHeight / 2;
-      const currentDistance = Math.abs(itemCenter - center);
-      if (currentDistance < distance) { distance = currentDistance; result = season; }
+  const startX =
+    useRef(0);
+
+  const startScroll =
+    useRef(0);
+
+  const bioTouchStartX =
+    useRef(0);
+
+  const bioTouchStartY =
+    useRef(0);
+
+  const bioTouchDragging =
+    useRef(false);
+
+  /* =======================================================
+     DESKTOP DRAG
+  ======================================================= */
+
+  const handleMouseDown = (
+    event:
+      React.MouseEvent<HTMLDivElement>
+  ) => {
+    if (!railRef.current) {
+      return;
     }
-    return result;
+
+    mouseDown.current =
+      true;
+
+    dragged.current =
+      false;
+
+    startX.current =
+      event.clientX;
+
+    startScroll.current =
+      railRef.current.scrollLeft;
   };
 
-  const settleWheel = () => {
-    const season = findCenteredSeason();
-    if (!season) return;
-    centerSeason(season);
-    if (season !== activeSeasonKey) onSelect(season);
+  const handleMouseMove = (
+    event:
+      React.MouseEvent<HTMLDivElement>
+  ) => {
+    if (
+      !railRef.current ||
+      !mouseDown.current
+    ) {
+      return;
+    }
+
+    const delta =
+      event.clientX -
+      startX.current;
+
+    if (
+      Math.abs(delta) >
+      6
+    ) {
+      dragged.current =
+        true;
+    }
+
+    if (
+      dragged.current
+    ) {
+      event.preventDefault();
+
+      railRef.current.scrollLeft =
+        startScroll.current -
+        delta * 1.1;
+    }
   };
 
-  useEffect(() => {
-    if (initialized.current || !activeSeasonKey) return;
-    const timer = setTimeout(() => { centerSeason(activeSeasonKey, "auto"); initialized.current = true; }, 80);
-    return () => clearTimeout(timer);
-  }, [activeSeasonKey]);
+  const stopMouseDrag =
+    () => {
+      mouseDown.current =
+        false;
 
-  const handleScroll = () => { if (scrollTimer.current) clearTimeout(scrollTimer.current); scrollTimer.current = setTimeout(() => { if (!mouseDown.current) settleWheel(); }, 130); };
-  const handleMouseDown = (e: React.MouseEvent) => { if (!wheelRef.current) return; mouseDown.current = true; didDrag.current = false; startY.current = e.clientY; startScroll.current = wheelRef.current.scrollTop; };
-  const handleMouseMove = (e: React.MouseEvent) => { if (!wheelRef.current || !mouseDown.current) return; const delta = e.clientY - startY.current; if (Math.abs(delta) > 3) didDrag.current = true; if (didDrag.current) { e.preventDefault(); wheelRef.current.scrollTop = startScroll.current - delta * 1.15; } };
-  const stopDrag = () => { if (!mouseDown.current) return; mouseDown.current = false; if (didDrag.current) setTimeout(settleWheel, 30); setTimeout(() => { didDrag.current = false; }, 90); };
+      window.setTimeout(
+        () => {
+          dragged.current =
+            false;
+        },
+        70
+      );
+    };
+
+  /* =======================================================
+     ACTOR SELECTION
+  ======================================================= */
+
+  const closeActor =
+    () => {
+      actorRequest.current +=
+        1;
+
+      setSelected(null);
+      setSelectedIndex(-1);
+      setSwipeDirection(0);
+
+      onActorOpenChange?.(
+        false
+      );
+    };
+
+  const selectActor = (
+    actor:
+      ActorMiniData
+  ) => {
+    if (
+      dragged.current
+    ) {
+      return;
+    }
+
+    const request =
+      ++actorRequest.current;
+
+    const index =
+      actors.findIndex(
+        (name) =>
+          name ===
+          actor.name
+      );
+
+    setSelected(actor);
+    setSelectedIndex(
+      index
+    );
+    setSwipeDirection(0);
+
+    onActorOpenChange?.(
+      true
+    );
+
+    void loadPerson(
+      actors[index] ||
+        actor.name
+    ).then((person) => {
+      if (
+        actorRequest.current ===
+        request
+      ) {
+        setSelected(
+          person
+        );
+      }
+    });
+  };
+
+  const showActorByIndex =
+    useCallback(
+      async (
+        requestedIndex:
+          number,
+        direction:
+          -1 | 1
+      ) => {
+        if (
+          actors.length ===
+          0
+        ) {
+          return;
+        }
+
+        let index =
+          requestedIndex;
+
+        if (index < 0) {
+          index =
+            actors.length -
+            1;
+        }
+
+        if (
+          index >=
+          actors.length
+        ) {
+          index = 0;
+        }
+
+        setSwipeDirection(
+          direction
+        );
+
+        const request =
+          ++actorRequest.current;
+
+        const name =
+          actors[index];
+
+        setSelectedIndex(
+          index
+        );
+
+        setSelected(
+          personCache.get(
+            name
+          ) || {
+            name,
+            photoUrl:
+              null,
+            bio:
+              "Chargement de la biographie…",
+          }
+        );
+
+        const actor =
+          await loadPerson(
+            name
+          );
+
+        if (
+          actorRequest.current ===
+          request
+        ) {
+          setSelected(
+            actor
+          );
+        }
+      },
+      [actors]
+    );
+
+  /* =======================================================
+     BIO SWIPE
+  ======================================================= */
+
+  const handleBioTouchStart = (
+    event:
+      React.TouchEvent<HTMLDivElement>
+  ) => {
+    const touch =
+      event.touches[0];
+
+    bioTouchStartX.current =
+      touch.clientX;
+
+    bioTouchStartY.current =
+      touch.clientY;
+
+    bioTouchDragging.current =
+      false;
+  };
+
+  const handleBioTouchMove = (
+    event:
+      React.TouchEvent<HTMLDivElement>
+  ) => {
+    const touch =
+      event.touches[0];
+
+    const deltaX =
+      touch.clientX -
+      bioTouchStartX.current;
+
+    const deltaY =
+      touch.clientY -
+      bioTouchStartY.current;
+
+    if (
+      Math.abs(deltaX) >
+        10 &&
+      Math.abs(deltaX) >
+        Math.abs(deltaY)
+    ) {
+      bioTouchDragging.current =
+        true;
+    }
+  };
+
+  const handleBioTouchEnd = (
+    event:
+      React.TouchEvent<HTMLDivElement>
+  ) => {
+    if (
+      !bioTouchDragging.current
+    ) {
+      return;
+    }
+
+    const touch =
+      event.changedTouches[0];
+
+    const deltaX =
+      touch.clientX -
+      bioTouchStartX.current;
+
+    bioTouchDragging.current =
+      false;
+
+    if (
+      deltaX < -42
+    ) {
+      void showActorByIndex(
+        selectedIndex + 1,
+        1
+      );
+
+      return;
+    }
+
+    if (
+      deltaX > 42
+    ) {
+      void showActorByIndex(
+        selectedIndex - 1,
+        -1
+      );
+    }
+  };
+
+  /* =======================================================
+     PRODUCTION
+  ======================================================= */
+
+  const companyNames =
+    Array.isArray(
+      companies
+    )
+      ? companies
+          .map(
+            (company) =>
+              company?.name
+          )
+          .filter(Boolean)
+          .slice(0, 4)
+      : [];
+
+  const producerNames =
+    Array.isArray(
+      producers
+    )
+      ? producers
+          .filter(
+            (producer) =>
+              [
+                "Producer",
+                "Executive Producer",
+              ].includes(
+                producer.job ||
+                  ""
+              )
+          )
+          .map(
+            (producer) =>
+              producer?.name
+          )
+          .filter(Boolean)
+          .slice(0, 2)
+      : [];
+
+  /* =======================================================
+     PORTRAIT — MOVIES
+  ======================================================= */
+
+  if (
+    portraitCompact
+  ) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col">
+        <div className="mb-2 flex h-[16px] shrink-0 items-center gap-2 px-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#d8ccff] shadow-[0_0_10px_rgba(216,204,255,.8)]" />
+
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/95">
+            Casting / Acteurs
+          </p>
+        </div>
+
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <AnimatePresence
+            initial={false}
+            mode="wait"
+          >
+            {!selected ? (
+              <motion.div
+                key="portrait-casting-rail"
+                initial={{
+                  opacity: 0,
+                }}
+                animate={{
+                  opacity: 1,
+                }}
+                exit={{
+                  opacity: 0,
+                }}
+                transition={
+                  appleLiteMode
+                    ? appleTransition
+                    : smoothTransition
+                }
+                className="
+                  absolute
+                  inset-0
+                  flex
+                  items-center
+                  overflow-hidden
+                  rounded-[16px]
+                  border
+                  border-white/[0.13]
+                  bg-transparent
+                  px-2
+                "
+              >
+                {movieLogo && (
+                  <div
+                    className="
+                      relative
+                      z-30
+                      mr-2
+                      flex
+                      h-[68px]
+                      w-[58px]
+                      shrink-0
+                      items-center
+                      justify-center
+                      border-r
+                      border-white/[0.10]
+                      pr-2
+                    "
+                  >
+                    <img
+                      src={
+                        movieLogo
+                      }
+                      alt="Logo"
+                      draggable={
+                        false
+                      }
+                      className="
+                        pointer-events-none
+                        max-h-[42px]
+                        max-w-full
+                        object-contain
+                        opacity-100
+                        drop-shadow-md
+                      "
+                    />
+                  </div>
+                )}
+
+                <div
+                  ref={railRef}
+                  style={{
+                    WebkitOverflowScrolling:
+                      "touch",
+
+                    touchAction:
+                      "pan-x",
+
+                    overscrollBehaviorX:
+                      "contain",
+                  }}
+                  className="
+                    flex
+                    min-w-0
+                    flex-1
+                    items-center
+                    gap-2
+                    overflow-x-auto
+                    overflow-y-hidden
+                    py-1
+                    select-none
+                    [scrollbar-width:none]
+                    [&::-webkit-scrollbar]:hidden
+                  "
+                >
+                  {actors.map(
+                    (actor) => (
+                      <ActorMini
+                        key={
+                          actor
+                        }
+                        name={
+                          actor
+                        }
+                        active={
+                          false
+                        }
+                        compact
+                        portraitCompact
+                        onSelect={
+                          selectActor
+                        }
+                      />
+                    )
+                  )}
+                </div>
+
+                <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-20 w-7 bg-gradient-to-l from-black/10 to-transparent" />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="portrait-bio"
+                initial={{
+                  opacity: 0,
+                }}
+                animate={{
+                  opacity: 1,
+                }}
+                exit={{
+                  opacity: 0,
+                }}
+                transition={
+                  appleLiteMode
+                    ? {
+                        duration:
+                          0.14,
+                      }
+                    : {
+                        duration:
+                          0.2,
+                      }
+                }
+                onTouchStart={
+                  handleBioTouchStart
+                }
+                onTouchMove={
+                  handleBioTouchMove
+                }
+                onTouchEnd={
+                  handleBioTouchEnd
+                }
+                onTouchCancel={() => {
+                  bioTouchDragging.current =
+                    false;
+                }}
+                style={{
+                  touchAction:
+                    "pan-y",
+                }}
+                className="
+                  absolute
+                  inset-0
+                  overflow-hidden
+                  rounded-[16px]
+                  border
+                  border-[#d8ccff]/18
+                  bg-[#0c0c10]/[0.98]
+                  shadow-[0_16px_50px_rgba(0,0,0,.38)]
+                "
+              >
+                {selected.photoUrl && (
+                  <img
+                    src={
+                      selected.photoUrl
+                    }
+                    alt=""
+                    draggable={
+                      false
+                    }
+                    className="
+                      absolute
+                      right-0
+                      top-0
+                      h-full
+                      w-[55%]
+                      object-cover
+                      object-top
+                    "
+                  />
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0f] via-[#0b0b0f]/98 via-[58%] to-transparent" />
+
+                <div className="relative z-10 flex h-full max-w-[72%] flex-col justify-center px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={
+                      closeActor
+                    }
+                    className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full border border-white/10 bg-black/35 text-white/70"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#d8ccff]">
+                    Casting
+                  </p>
+
+                  <h3 className="mt-1 text-[17px] font-semibold tracking-[-0.03em] text-white">
+                    {
+                      selected.name
+                    }
+                  </h3>
+
+<div className="mt-2 max-h-[82px] overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  <p className="text-[10px] leading-[1.55] text-white/70">
+    {selected.bio || "Biographie indisponible."}
+  </p>
+</div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
+  /* =======================================================
+     LANDSCAPE + DESKTOP — MOVIES
+  ======================================================= */
 
   return (
-    <div style={{ height: SEASON_WHEEL_HEIGHT }} className="relative w-full shrink-0 overflow-hidden rounded-[22px] border border-white/[0.10] bg-white/[0.035] backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,.11)]">
-      <div style={{ height: SEASON_ITEM_HEIGHT }} className="pointer-events-none absolute left-3 right-3 top-1/2 z-10 -translate-y-1/2 rounded-[14px] border border-[#d8ccff]/25 bg-[#d8ccff]/[0.055] shadow-[inset_0_1px_0_rgba(255,255,255,.10)]" />
-      <div ref={wheelRef} onScroll={handleScroll} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={stopDrag} onMouseLeave={stopDrag} style={{ paddingTop: padding, paddingBottom: padding, WebkitOverflowScrolling: "touch" }} className="relative z-20 h-full overflow-y-auto overscroll-y-contain snap-y snap-mandatory scrollbar-none select-none cursor-grab active:cursor-grabbing">
-        {seasons.map((season) => {
-          const active = activeSeasonKey === season;
-          return (
-            <button ref={(node) => { itemRefs.current[season] = node; }} key={season} type="button" style={{ height: SEASON_ITEM_HEIGHT }} onClick={() => { if (didDrag.current) return; onSelect(season); centerSeason(season); }} className={cn("snap-center flex w-full shrink-0 items-center justify-center text-sm transition-all duration-300", active ? "scale-[1.08] font-semibold text-white opacity-100" : "scale-[0.92] font-medium text-white/30 opacity-60 hover:text-white/60")}>
-              Saison {normalizeSeason(season)}
+    <div
+      className={cn(
+        "relative flex h-full min-h-0 w-full items-center overflow-hidden",
+
+        compactLandscape
+          ? "rounded-[13px] border border-white/[0.12] bg-black/15 px-2"
+          : "rounded-[18px] border border-white/[0.10] bg-black/10 px-3"
+      )}
+    >
+      <AnimatePresence
+        initial={false}
+        mode="wait"
+      >
+        {!selected ? (
+          <motion.div
+            key="casting-main"
+            initial={{
+              opacity: 0,
+            }}
+            animate={{
+              opacity: 1,
+            }}
+            exit={{
+              opacity: 0,
+            }}
+            transition={
+              appleLiteMode
+                ? appleTransition
+                : smoothTransition
+            }
+            className="absolute inset-0 flex items-center"
+          >
+            {/* TITLE LOGO */}
+
+            {movieLogo && (
+              <div
+                className={cn(
+                  "flex shrink-0 items-center justify-center border-r border-white/[0.08]",
+
+                  compactLandscape
+                    ? "h-[48px] w-[62px] px-2"
+                    : "h-[70px] w-[92px] px-3"
+                )}
+              >
+                <img
+                  src={
+                    movieLogo
+                  }
+                  alt=""
+                  draggable={
+                    false
+                  }
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            )}
+
+            {/* ACTORS */}
+
+            <div
+              ref={railRef}
+              onMouseDown={
+                handleMouseDown
+              }
+              onMouseMove={
+                handleMouseMove
+              }
+              onMouseUp={
+                stopMouseDrag
+              }
+              onMouseLeave={
+                stopMouseDrag
+              }
+              style={{
+                WebkitOverflowScrolling:
+                  "touch",
+
+                touchAction:
+                  "pan-x",
+
+                overscrollBehaviorX:
+                  "contain",
+              }}
+              className={cn(
+                `
+                flex
+                min-w-0
+                items-center
+                overflow-x-auto
+                overflow-y-hidden
+                select-none
+                [scrollbar-width:none]
+                [&::-webkit-scrollbar]:hidden
+                `,
+
+                compactLandscape
+                  ? "w-[72%] gap-2 px-2"
+                  : "flex-1 gap-2.5 px-3"
+              )}
+            >
+              {actors.map(
+                (actor) => (
+                  <ActorMini
+                    key={
+                      actor
+                    }
+                    name={
+                      actor
+                    }
+                    active={
+                      false
+                    }
+                    compact
+                    landscapeCompact={
+                      compactLandscape
+                    }
+                    onSelect={
+                      selectActor
+                    }
+                  />
+                )
+              )}
+            </div>
+
+            {/* PRODUCTION */}
+
+            <div
+              className={cn(
+                `
+                ml-auto
+                flex
+                shrink-0
+                items-center
+                justify-end
+                border-l
+                border-white/[0.08]
+                `,
+
+                compactLandscape
+                  ? "h-[48px] w-[28%] gap-2 px-2"
+                  : "h-[70px] min-w-[210px] gap-3 px-4"
+              )}
+            >
+              <div className="min-w-0 text-right">
+                <p
+                  className={cn(
+                    "font-semibold uppercase tracking-[0.18em] text-[#d8ccff]/75",
+
+                    compactLandscape
+                      ? "text-[5px]"
+                      : "text-[7px]"
+                  )}
+                >
+                  Production & Studios
+                </p>
+
+                <p
+                  className={cn(
+                    "mt-1 truncate font-semibold text-white/90",
+
+                    compactLandscape
+                      ? "text-[6px]"
+                      : "text-[9px]"
+                  )}
+                >
+                  {studio ||
+                    companyNames[0] ||
+                    producerNames[0] ||
+                    "Production"}
+                </p>
+              </div>
+
+              {studioLogo && (
+                <div
+                  className={cn(
+                    "grid shrink-0 place-items-center rounded-[10px] bg-white",
+
+                    compactLandscape
+                      ? "h-[38px] w-[38px]"
+                      : "h-[54px] w-[54px]"
+                  )}
+                >
+                  <img
+                    src={
+                      studioLogo
+                    }
+                    alt={
+                      studio ||
+                      "Studio"
+                    }
+                    draggable={
+                      false
+                    }
+                    className="max-h-[78%] max-w-[78%] object-contain"
+                  />
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={
+              selected.name
+            }
+            initial={{
+              opacity: 0,
+              x:
+                swipeDirection ===
+                -1
+                  ? -20
+                  : 20,
+            }}
+            animate={{
+              opacity: 1,
+              x: 0,
+            }}
+            exit={{
+              opacity: 0,
+            }}
+            transition={
+              appleLiteMode
+                ? appleTransition
+                : smoothTransition
+            }
+            onTouchStart={
+              handleBioTouchStart
+            }
+            onTouchMove={
+              handleBioTouchMove
+            }
+            onTouchEnd={
+              handleBioTouchEnd
+            }
+            className="absolute inset-0 flex items-center overflow-hidden"
+          >
+            {selected.photoUrl && (
+  <img
+    src={selected.photoUrl}
+    alt=""
+    draggable={false}
+    className="
+      absolute
+      bottom-0
+      right-0
+      h-[92%]
+      w-[38%]
+      object-cover
+      object-[center_37%]
+      opacity-40
+    "
+  />
+)}
+
+            <div className="absolute inset-0 bg-gradient-to-r from-[#09090d] via-[#09090d]/95 to-[#09090d]/50" />
+
+            <button
+              type="button"
+              onClick={
+                closeActor
+              }
+              className="absolute right-2 top-2 z-30 grid h-6 w-6 place-items-center rounded-full border border-white/10 bg-black/35 text-white/70"
+            >
+              <X className="h-3 w-3" />
             </button>
-          );
-        })}
-      </div>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#0a0a0d] via-[#0a0a0d]/85 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#0a0a0d] via-[#0a0a0d]/85 to-transparent" />
+
+            <div
+              className={cn(
+                "relative z-10 min-w-0",
+
+                compactLandscape
+                  ? "max-w-[68%] px-3"
+                  : "max-w-[72%] px-5"
+              )}
+            >
+              <p
+                className={cn(
+                  "font-semibold uppercase tracking-[0.18em] text-[#d8ccff]",
+
+                  compactLandscape
+                    ? "text-[5px]"
+                    : "text-[7px]"
+                )}
+              >
+                Casting
+              </p>
+
+              <h3
+                className={cn(
+                  "mt-1 truncate font-semibold tracking-[-0.03em] text-white",
+
+                  compactLandscape
+                    ? "text-[10px]"
+                    : "text-[15px]"
+                )}
+              >
+                {
+                  selected.name
+                }
+              </h3>
+
+              <p
+                className={cn(
+                  "mt-1.5 line-clamp-3 leading-[1.5] text-white/65",
+
+                  compactLandscape
+                    ? "text-[5.5px]"
+                    : "text-[8px]"
+                )}
+              >
+                {selected.bio ||
+                  "Biographie indisponible."}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-}
-
-function EpisodeImage({ ep, seriesTitle, tmdbId, seasonKey, fallbackCover }: { ep: any; seriesTitle: string; tmdbId?: string | number; seasonKey: string; fallbackCover?: string; }) {
-  const [imgSrc, setImgSrc] = useState<string | null>(ep.info?.movie_image || null);
-
-  useEffect(() => {
-    if (ep.info?.movie_image) { setImgSrc(ep.info.movie_image); return; }
-    let mounted = true;
-    const season = seasonKey.replace(/\D/g, "") || "1";
-    fetch(`/api/episode-image?tmdbId=${tmdbId || ""}&show=${encodeURIComponent(seriesTitle)}&season=${season}&episode=${ep.episode_num || ep.episode}`)
-      .then((res) => res.json())
-      .then((json) => { if (mounted && json?.imageUrl) setImgSrc(json.imageUrl); }).catch(() => {});
-    return () => { mounted = false; };
-  }, [ep, seriesTitle, tmdbId, seasonKey]);
-
-  return <SmartImage src={imgSrc || fallbackCover} alt={ep.title || "Épisode"} rounded="rounded-none" className="h-full w-full object-cover pointer-events-none" />;
 }
 
 /* =========================================================
-   PAGE SÉRIE (Principale)
+   PAGE SERIES
 ========================================================= */
 
 export default function SeriesDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = (params?.seriesId || params?.id) as string;
+  const params =
+    useParams();
 
-  const { data, isLoading, isError } = useSeriesInfo(id);
-  const { isFav, toggleFav, progress } = useLibrary();
+  const router =
+    useRouter();
 
-  const [playerMode, setPlayerMode] = useState<"director" | "episodes" | "playing">("director");
-  const playerSectionRef = useRef<HTMLDivElement>(null);
-  const [seasonKey, setSeasonKey] = useState<string | null>(null);
-  const [activeEpisode, setActiveEpisode] = useState<Episode | null>(null);
-  const [activeEpisodeDuration, setActiveEpisodeDuration] = useState(0);
+  const id =
+    (
+      params?.seriesId ||
+      params?.id
+    ) as string;
 
-  const playerContainerRef = useRef<HTMLDivElement>(null);
-  const lastTapRef = useRef(0);
-  const epListRef = useRef<HTMLDivElement>(null);
-  const epDrag = useRef({ isDown: false, startY: 0, scrollTop: 0, didDrag: false });
+  const {
+    data,
+    isLoading,
+    isError,
+  } =
+    useSeriesInfo(id);
+
+  const {
+    isFav,
+    toggleFav,
+    progress,
+  } =
+    useLibrary();
+
+  /* =======================================================
+     PLAYER STATE
+
+     director  -> Movie DirectorShowcase
+     episodes  -> episodes de la saison
+     playing   -> VideoPlayer
+
+     Toujours dans LE MÊME panneau.
+  ======================================================= */
+
+  const [
+    playerMode,
+    setPlayerMode,
+  ] =
+    useState<
+      | "director"
+      | "episodes"
+      | "playing"
+    >("director");
+
+  const [
+    showSeasons,
+    setShowSeasons,
+  ] =
+    useState(false);
+
+  const [
+    seasonKey,
+    setSeasonKey,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    activeEpisode,
+    setActiveEpisode,
+  ] =
+    useState<Episode | null>(
+      null
+    );
+
+  const [
+    activeEpisodeDuration,
+    setActiveEpisodeDuration,
+  ] =
+    useState(0);
+
+  const [
+    fullscreen,
+    setFullscreen,
+  ] =
+    useState(false);
+
+  const [
+    actorOpen,
+    setActorOpen,
+  ] =
+    useState(false);
+
+  const screenMode =
+    useScreenMode(
+      fullscreen
+    );
+
+  const appleLiteMode =
+    useAppleSafariLiteMode();
+
+  const playerContainerRef =
+    useRef<HTMLDivElement>(
+      null
+    );
+
+  const epListRef =
+    useRef<HTMLDivElement>(
+      null
+    );
+
+  const epDrag =
+    useRef({
+      isDown: false,
+      startY: 0,
+      scrollTop: 0,
+      didDrag: false,
+    });
 
   /* =======================================================
      SERIES DATA
   ======================================================= */
-  const info = data?.info || data?.series_info || (data && !data.episodes ? data : {}) || {};
-  const episodesBySeason = data?.episodes ?? {};
-  
-  const rawTitle = info?.name || info?.title || "Série";
-  const cleanTitle = cleanName(rawTitle).replace(/\s*\(\d{4}\)/g, "").replace(/\s*\[\d{4}\]/g, "").trim();
-  
-  const tmdbId = info?.tmdb_id || info?.tmdbId;
-  const safeTitle = !isLoading && cleanTitle !== "Série" ? cleanTitle : undefined;
 
-  // HOOKS
-  const logoUrl = useTitleLogo(tmdbId, safeTitle, "tv");
-  
-  // Utilisation de notre nouveau paramètre "isTmdbLoading"
-  const { details: productionDetails, loading: isTmdbLoading } = useProductionDetails(tmdbId, safeTitle, "tv");
-  const fanart = useFanartSeries(tmdbId);
-  
-  const productionLogoUrl = productionDetails?.studioLogo || null;
-  const studioName = productionDetails?.studio || info?.studio || info?.network || "Studio Inconnu";
-  const companies = productionDetails?.companies || [];
-  const producers = productionDetails?.producers || [];
-  const finalSynopsis = info?.plot || info?.description || info?.overview || productionDetails?.overview || "Aucun synopsis détaillé n'est disponible pour cette série.";
+  const info =
+    data?.info ||
+    data?.series_info ||
+    (
+      data &&
+      !data.episodes
+        ? data
+        : {}
+    ) ||
+    {};
 
-  // LA LOGIQUE DE SÉLECTION INFAILLIBLE DU DIRECTEUR (1. TMDB Créateur > 2. IPTV > 3. TMDB Autre)
-  const tmdbCreator = producers.find(p => p.job === "Creator" || p.job === "Showrunner")?.name;
-  const xtreamDirector = info?.director ? String(info.director).split(",")[0].trim() : undefined;
-  const tmdbFallback = producers.find(p => ["Director", "Series Director", "Executive Producer"].includes(p.job))?.name;
-  
-  // Le nom final ne sera assigné que lorsque TMDB aura répondu (grâce au "undefined") pour empêcher le double flash
-  const bestDirectorName = tmdbCreator || xtreamDirector || tmdbFallback;
-  const finalDirectorName = isTmdbLoading ? undefined : bestDirectorName;
+  const episodesBySeason =
+    data?.episodes ??
+    {};
+
+  const rawTitle =
+    info?.name ||
+    info?.title ||
+    "Série";
+
+  const cleanTitle =
+    cleanName(
+      rawTitle
+    )
+      .replace(
+        /\s*\(\d{4}\)/g,
+        ""
+      )
+      .replace(
+        /\s*\[\d{4}\]/g,
+        ""
+      )
+      .trim();
+
+  const tmdbId =
+    info?.tmdb_id ||
+    info?.tmdbId;
+
+  const safeTitle =
+    !isLoading &&
+    cleanTitle !==
+      "Série"
+      ? cleanTitle
+      : undefined;
+
+  const logoUrl =
+    useTitleLogo(
+      tmdbId,
+      safeTitle
+    );
+
+  const {
+    details:
+      productionDetails,
+
+    loading:
+      isTmdbLoading,
+  } =
+    useProductionDetails(
+      tmdbId,
+      safeTitle
+    );
+
+  const fanart =
+    useFanartSeries(
+      tmdbId
+    );
+
+  const productionLogoUrl =
+    productionDetails
+      ?.studioLogo ||
+    null;
+
+  const studioName =
+    productionDetails
+      ?.studio ||
+    info?.studio ||
+    info?.network ||
+    "Studio Inconnu";
+
+  const companies =
+    productionDetails
+      ?.companies ||
+    [];
+
+  const producers =
+    productionDetails
+      ?.producers ||
+    [];
+
+  const finalSynopsis =
+    info?.plot ||
+    info?.description ||
+    info?.overview ||
+    productionDetails
+      ?.overview ||
+    "Aucun synopsis détaillé n'est disponible pour cette série.";
 
   /* =======================================================
-     SEASONS & META
+     DIRECTOR / CREATOR
   ======================================================= */
-  const seasons = useMemo(() => Object.keys(episodesBySeason).filter((season) => (episodesBySeason[season] || []).length > 0).sort((a, b) => (parseInt(a.replace(/\D/g, ""), 10) || 0) - (parseInt(b.replace(/\D/g, ""), 10) || 0)), [episodesBySeason]);
-  const activeSeasonKey = seasonKey ?? seasons[0] ?? null;
-  const episodes = activeSeasonKey ? episodesBySeason[activeSeasonKey] || [] : [];
-  const castList = useMemo(() => info?.cast ? String(info.cast).split(",").map((v) => v.trim()).filter(Boolean) : [], [info?.cast]);
-  const rating = ratingNum(info?.rating);
-  const year = yearFrom(info?.releaseDate || info?.releasedate, cleanTitle);
-  const backdrop = fanart?.backdrop || info?.backdrop_path?.[0] || info?.backdrop || info?.cover;
-  const basePoster = fanart?.poster || info?.cover;
-  const selectedSeasonNumber = activeSeasonKey?.replace(/\D/g, "") || "";
-  const selectedSeasonPoster = selectedSeasonNumber ? fanart?.seasons?.[selectedSeasonNumber]?.poster : null;
-  const currentPoster = selectedSeasonPoster || basePoster;
-  const fav = isFav("series", Number(id));
+
+  const tmdbCreator =
+    producers.find(
+      (producer) =>
+        producer.job ===
+          "Creator" ||
+        producer.job ===
+          "Showrunner"
+    )?.name;
+
+  const xtreamDirector =
+    info?.director
+      ? String(
+          info.director
+        )
+          .split(",")[0]
+          .trim()
+      : undefined;
+
+  const tmdbFallback =
+    producers.find(
+      (producer) =>
+        [
+          "Director",
+          "Series Director",
+          "Executive Producer",
+        ].includes(
+          producer.job ||
+            ""
+        )
+    )?.name;
+
+  const bestDirectorName =
+    tmdbCreator ||
+    xtreamDirector ||
+    tmdbFallback;
+
+  const finalDirectorName =
+    isTmdbLoading
+      ? undefined
+      : bestDirectorName;
 
   /* =======================================================
-     DURATION API & OTHERS
+     SEASONS
   ======================================================= */
-  useEffect(() => {
-    if (!activeEpisode) { setActiveEpisodeDuration(0); return; }
-    const localDuration = parseDurationToSeconds((activeEpisode as any)?.info?.duration_secs) || parseDurationToSeconds((activeEpisode as any)?.info?.duration) || parseDurationToSeconds((activeEpisode as any)?.duration_secs);
-    if (localDuration > 0) { setActiveEpisodeDuration(localDuration); return; }
-    const episodeId = (activeEpisode as any)?.id ?? (activeEpisode as any)?.stream_id;
-    if (!episodeId || !id) { setActiveEpisodeDuration(0); return; }
 
-    let mounted = true;
-    setActiveEpisodeDuration(0);
-    fetch(`/api/media-info?type=series&seriesId=${encodeURIComponent(id)}&episodeId=${encodeURIComponent(String(episodeId))}`, { cache: "no-store" })
-      .then(async (res) => { if (!res.ok) throw new Error(); return res.json(); })
-      .then((json) => { if (!mounted) return; const value = Number(json?.duration || 0); setActiveEpisodeDuration(Number.isFinite(value) && value > 0 ? value : 0); })
-      .catch(() => { if (mounted) setActiveEpisodeDuration(0); });
-    return () => { mounted = false; };
-  }, [activeEpisode, id]);
+  const seasons =
+    useMemo(
+      () =>
+        Object.keys(
+          episodesBySeason
+        )
+          .filter(
+            (season) =>
+              (
+                episodesBySeason[
+                  season
+                ] || []
+              ).length >
+              0
+          )
+          .sort(
+            (a, b) =>
+              (
+                parseInt(
+                  a.replace(
+                    /\D/g,
+                    ""
+                  ),
+                  10
+                ) || 0
+              ) -
+              (
+                parseInt(
+                  b.replace(
+                    /\D/g,
+                    ""
+                  ),
+                  10
+                ) || 0
+              )
+          ),
+      [
+        episodesBySeason,
+      ]
+    );
 
-  const resumeEpisode = useMemo(() => {
-    for (const season of seasons) {
-      for (const ep of episodesBySeason[season] || []) {
-        if ((progress[`series:${ep.id}`]?.position ?? 0) > 15) return { episode: ep, season };
-      }
+  const activeSeasonKey =
+    seasonKey ??
+    seasons[0] ??
+    null;
+
+  const episodes =
+    activeSeasonKey
+      ? episodesBySeason[
+          activeSeasonKey
+        ] || []
+      : [];
+
+      const selectedSeasonNumber =
+  activeSeasonKey
+    ? parseInt(
+        activeSeasonKey.replace(/\D/g, ""),
+        10
+      ) || 1
+    : 1;
+
+  /* =======================================================
+     CAST
+  ======================================================= */
+
+  const castList =
+    useMemo(
+      () =>
+        info?.cast
+          ? String(
+              info.cast
+            )
+              .split(",")
+              .map(
+                (value) =>
+                  value.trim()
+              )
+              .filter(
+                Boolean
+              )
+          : [],
+      [
+        info?.cast,
+      ]
+    );
+
+  /* =======================================================
+     METADATA
+  ======================================================= */
+
+  const rating =
+    ratingNum(
+      info?.rating
+    );
+
+  const year =
+    yearFrom(
+      info?.releaseDate ||
+        info?.releasedate,
+      cleanTitle
+    );
+
+  const genreText =
+    String(
+      info?.genre ||
+        info?.category_name ||
+        ""
+    )
+      .split(",")[0]
+      .trim();
+
+  /* =======================================================
+     ARTWORK
+
+     IMPORTANT :
+     on conserve l'effet background Série que tu aimais.
+     On ne touche pas au squelette responsive Movie.
+  ======================================================= */
+
+  const backdrop =
+    fanart?.backdrop ||
+    info
+      ?.backdrop_path?.[0] ||
+    info?.backdrop ||
+    info?.cover;
+
+  const basePoster =
+    fanart?.poster ||
+    info?.cover;
+
+  const currentPoster =
+    basePoster;
+
+  const fav =
+    isFav(
+      "series",
+      Number(id)
+    );
+
+  /* =======================================================
+     FAVORITE
+  ======================================================= */
+
+  const handleFavorite =
+    useCallback(
+      () => {
+        toggleFav(
+          "series",
+          {
+            id:
+              Number(id),
+
+            title:
+              cleanTitle,
+
+            image:
+              basePoster ||
+              currentPoster ||
+              "",
+          } as any
+        );
+      },
+      [
+        toggleFav,
+        id,
+        cleanTitle,
+        basePoster,
+        currentPoster,
+      ]
+    );
+
+  /* =======================================================
+     REGARDER
+
+     IMPORTANT :
+     le premier clic NE LANCE PAS directement le player.
+
+     Il révèle uniquement les saisons horizontalement
+     à côté de Regarder.
+  ======================================================= */
+
+  const handleWatch =
+    useCallback(
+      () => {
+        setShowSeasons(
+          true
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     SELECT SEASON
+
+     La saison ne crée aucune nouvelle zone.
+     Le panneau Réalisation devient la liste épisodes.
+  ======================================================= */
+
+  const handleSeasonSelect =
+    useCallback(
+      (
+        season:
+          string
+      ) => {
+        setSeasonKey(
+          season
+        );
+
+        setActiveEpisode(
+          null
+        );
+
+        setPlayerMode(
+          "episodes"
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     SELECT EPISODE
+
+     Même panneau -> VideoPlayer.
+  ======================================================= */
+
+  const handleEpisodeSelect =
+    useCallback(
+      (
+        episode:
+          Episode
+      ) => {
+        if (
+          epDrag.current
+            .didDrag
+        ) {
+          return;
+        }
+
+        setActiveEpisode(
+          episode
+        );
+
+        setPlayerMode(
+          "playing"
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     CLOSE PLAYER
+
+     Retour aux épisodes de la saison sélectionnée.
+  ======================================================= */
+
+  const handleClosePlayer =
+    useCallback(
+      () => {
+        setPlayerMode(
+          "episodes"
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     EPISODE DRAG
+  ======================================================= */
+
+  const handleEpMouseDown = (
+    event:
+      React.MouseEvent
+  ) => {
+    epDrag.current.isDown =
+      true;
+
+    epDrag.current.didDrag =
+      false;
+
+    epDrag.current.startY =
+      event.clientY;
+
+    epDrag.current.scrollTop =
+      epListRef.current
+        ?.scrollTop ||
+      0;
+  };
+
+  const handleEpMouseMove = (
+    event:
+      React.MouseEvent
+  ) => {
+    if (
+      !epDrag.current
+        .isDown ||
+      !epListRef.current
+    ) {
+      return;
     }
-    return null;
-  }, [seasons, episodesBySeason, progress]);
 
-  const scrollToPlayer = () => { if (window.innerWidth < 1024) setTimeout(() => playerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); };
-  const handleFullscreen = async () => { const element = playerContainerRef.current; if (!element) return; try { await element.requestFullscreen?.(); if (window.screen?.orientation && "lock" in window.screen.orientation) await (window.screen.orientation as any).lock("landscape").catch(() => {}); } catch {} };
-  const handleDoubleTap = () => { const now = Date.now(); if (now - lastTapRef.current < 300) handleFullscreen(); lastTapRef.current = now; };
+    const delta =
+      event.clientY -
+      epDrag.current
+        .startY;
 
-  const handleEpMouseDown = (e: React.MouseEvent) => { epDrag.current.isDown = true; epDrag.current.didDrag = false; epDrag.current.startY = e.clientY; epDrag.current.scrollTop = epListRef.current?.scrollTop || 0; };
-  const handleEpMouseMove = (e: React.MouseEvent) => { if (!epDrag.current.isDown || !epListRef.current) return; const delta = e.clientY - epDrag.current.startY; if (Math.abs(delta) > 5) epDrag.current.didDrag = true; epListRef.current.scrollTop = epDrag.current.scrollTop - delta; };
-  const handleEpMouseUp = () => { epDrag.current.isDown = false; };
+    if (
+      Math.abs(
+        delta
+      ) > 5
+    ) {
+      epDrag.current.didDrag =
+        true;
+    }
 
-  if (isLoading) return <SeriesSkeleton />;
-  if (isError || !data || !id) return <div className="min-h-screen grid place-items-center bg-[#060608] text-white/40">Impossible de charger la série.</div>;
+    epListRef.current.scrollTop =
+      epDrag.current
+        .scrollTop -
+      delta;
+  };
 
-  const activeResumePosition = activeEpisode ? progress[`series:${activeEpisode.id}`]?.position ?? 0 : 0;
+  const handleEpMouseUp =
+    () => {
+      epDrag.current.isDown =
+        false;
 
-  return (
-    <main className="min-h-[100dvh] overflow-x-hidden bg-[#060608] text-white pb-20">
-      
-      {/* BACKGROUND FULL SCREEN */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        {backdrop && <motion.img key={backdrop} initial={{ opacity: 0, scale: 1.025 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9 }} src={backdrop} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#060608] via-[#060608]/92 via-[43%] to-[#060608]/20" />
-        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#060608] via-transparent via-[68%] to-transparent" />
+      window.setTimeout(
+        () => {
+          epDrag.current.didDrag =
+            false;
+        },
+        50
+      );
+    };
+
+  /* =======================================================
+     EPISODE DURATION
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      !activeEpisode
+    ) {
+      setActiveEpisodeDuration(
+        0
+      );
+
+      return;
+    }
+
+    const episode =
+      activeEpisode as any;
+
+    const localDuration =
+      durationToSeconds(
+        episode?.info
+          ?.duration_secs
+      ) ||
+      durationToSeconds(
+        episode?.info
+          ?.duration
+      ) ||
+      durationToSeconds(
+        episode
+          ?.duration_secs
+      );
+
+    if (
+      localDuration >
+      0
+    ) {
+      setActiveEpisodeDuration(
+        localDuration
+      );
+
+      return;
+    }
+
+    const episodeId =
+      episode?.id ??
+      episode
+        ?.stream_id;
+
+    if (
+      !episodeId ||
+      !id
+    ) {
+      setActiveEpisodeDuration(
+        0
+      );
+
+      return;
+    }
+
+    let mounted =
+      true;
+
+    fetch(
+      `/api/media-info?type=series&seriesId=${encodeURIComponent(
+        id
+      )}&episodeId=${encodeURIComponent(
+        String(
+          episodeId
+        )
+      )}`,
+      {
+        cache:
+          "no-store",
+      }
+    )
+      .then(
+        async (
+          response
+        ) => {
+          if (
+            !response.ok
+          ) {
+            throw new Error();
+          }
+
+          return response.json();
+        }
+      )
+      .then(
+        (json) => {
+          if (
+            !mounted
+          ) {
+            return;
+          }
+
+          const value =
+            Number(
+              json?.duration ||
+                0
+            );
+
+          setActiveEpisodeDuration(
+            Number.isFinite(
+              value
+            ) &&
+              value >
+                0
+              ? value
+              : 0
+          );
+        }
+      )
+      .catch(
+        () => {
+          if (
+            mounted
+          ) {
+            setActiveEpisodeDuration(
+              0
+            );
+          }
+        }
+      );
+
+    return () => {
+      mounted =
+        false;
+    };
+  }, [
+    activeEpisode,
+    id,
+  ]);
+
+  /* =======================================================
+     ACTIVE RESUME
+  ======================================================= */
+
+  const activeResumePosition =
+    activeEpisode
+      ? progress[
+          `series:${activeEpisode.id}`
+        ]?.position ??
+        0
+      : 0;
+
+  /* =======================================================
+     FULLSCREEN STATE
+  ======================================================= */
+
+  useEffect(() => {
+    const update =
+      () => {
+        setFullscreen(
+          Boolean(
+            document.fullscreenElement
+          )
+        );
+      };
+
+    document.addEventListener(
+      "fullscreenchange",
+      update
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        update
+      );
+    };
+  }, []);
+
+  /* =======================================================
+     LOADING / ERROR
+  ======================================================= */
+
+  if (
+    isLoading ||
+    !screenMode
+  ) {
+    return (
+      <SeriesSkeleton />
+    );
+  }
+
+  if (
+    isError ||
+    !data ||
+    !id
+  ) {
+    return (
+      <div className="grid h-full min-h-0 w-full place-items-center bg-[#060608] text-white/40">
+        Impossible de charger la série.
       </div>
+    );
+  }
 
-      <button type="button" onClick={() => { if (window.history.length > 1) router.back(); else router.push(SERIES_CATEGORIES_ROUTE); }} className="absolute left-4 top-4 z-50 inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.12] bg-black/30 px-4 text-xs font-medium text-white/70 backdrop-blur-2xl transition hover:bg-white/[0.10] hover:text-white sm:left-7 lg:left-12 lg:top-8">
-        <ArrowLeft className="h-4 w-4" /> Retour aux catégories
-      </button>
+    /* =======================================================
+     SEASON ACTIONS
+     REGARDER + SAISONS HORIZONTALES
 
-      {/* =================================================
-          GRILLE HAUT : 3 COLONNES
-      ================================================= */}
-      <div className="relative z-10 mx-auto max-w-[1900px] px-4 pt-24 sm:px-7 lg:px-12 lg:pt-[110px]">
-        <div className="flex flex-col lg:flex-row items-stretch gap-8 lg:gap-12">
-          
-          <div className="hidden lg:flex lg:flex-col w-[185px] xl:w-[210px] shrink-0">
-            <div className="relative aspect-[2/3] w-full shrink-0">
-              <AnimatePresence mode="wait">
-                {currentPoster && (
-                  <motion.div key={currentPoster} initial={{ opacity: 0, scale: 1.025 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.99 }} transition={{ duration: 0.4 }} className="absolute inset-0 overflow-hidden rounded-[24px] border border-white/[0.14] bg-white/[0.03] shadow-[0_25px_70px_rgba(0,0,0,.48)]">
-                    <img src={currentPoster} alt={cleanTitle} draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-                    <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.10] to-transparent" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            <div className="min-h-6 flex-1" />
-            {seasons.length > 0 && <SeasonWheel seasons={seasons} activeSeasonKey={activeSeasonKey} onSelect={(season) => { setSeasonKey(season); setPlayerMode("episodes"); scrollToPlayer(); }} />}
-          </div>
+     - au départ : Regarder seulement
+     - clic Regarder : saisons visibles
+     - aucune SeasonWheel verticale
+     - aucun nouveau bloc
+  ======================================================= */
 
-          <div className="flex-1 min-w-0 flex flex-col">
-            {logoUrl ? <img src={logoUrl} alt={cleanTitle} className="max-h-[130px] max-w-[80vw] object-contain object-left drop-shadow-[0_16px_30px_rgba(0,0,0,.65)] sm:max-h-[150px] sm:max-w-[450px] mb-2" /> : <h1 className="text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl xl:text-6xl mb-2">{cleanTitle}</h1>}
+  const renderSeasonActions = (
+    mode:
+      | "desktop"
+      | "portrait"
+      | "landscape"
+  ) => {
+    const compact =
+      mode ===
+      "landscape";
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/60 sm:text-sm font-medium">
-              {rating > 0 && <span className="flex items-center gap-1.5 text-[#d8ccff]"><Star className="h-4 w-4 fill-current" />{rating.toFixed(1)}</span>}
-              {year && <span>• {year}</span>}
-              {seasons.length > 0 && <span>• {seasons.length} saison{seasons.length > 1 ? "s" : ""}</span>}
-              {info?.genre && <span>• {info.genre}</span>}
-            </div>
+    return (
+      <div
+        className={cn(
+          "flex min-w-0 items-center",
 
-            {finalSynopsis && <p className="mt-6 max-w-2xl text-sm leading-relaxed text-white/80 xl:text-[15px]">{finalSynopsis}</p>}
+          compact
+            ? "gap-1"
+            : mode ===
+                "portrait"
+              ? "gap-2"
+              : "gap-2.5"
+        )}
+      >
+        <button
+          type="button"
+          onClick={
+            handleWatch
+          }
+          className={cn(
+            `
+            inline-flex
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-white
+            font-bold
+            text-black
+            shadow-[0_8px_24px_rgba(0,0,0,.25)]
+            transition
+            active:scale-[.97]
+            `,
 
-            {/* DESIGN ERGONOMIQUE POUR LA GRILLE DE L'EQUIPE */}
-            {producers.length > 0 && (
-              <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 max-w-2xl border-t border-white/10 pt-5">
-                {producers.slice(0, 3).map((person, index) => (
-                  <div key={`${person.id}-${index}`} className="flex flex-col">
-                    <span className="text-[13px] font-bold text-white tracking-tight">{person.name}</span>
-                    <span className="text-[10px] text-[#d8ccff]/70 uppercase tracking-widest font-semibold">{person.job}</span>
-                  </div>
-                ))}
-              </div>
+            compact
+              ? "h-[29px] gap-1 px-2.5 text-[5.7px]"
+              : mode ===
+                  "portrait"
+                ? "h-9 gap-1.5 px-3 text-[12px]"
+                : "h-10 gap-2 px-6 text-[10px]"
+          )}
+        >
+          <Play
+            className={cn(
+              "fill-current",
+
+              compact
+                ? "h-2.5 w-2.5"
+                : mode ===
+                    "portrait"
+                  ? "h-3 w-3"
+                  : "h-3.5 w-3.5"
             )}
+          />
 
-            <div className="mt-10 flex flex-wrap gap-4">
-              <button type="button" onClick={() => { if (resumeEpisode) { setSeasonKey(resumeEpisode.season); setPlayerMode("episodes"); scrollToPlayer(); } else if (episodes[0]) { setPlayerMode("episodes"); scrollToPlayer(); } }} className="relative h-12 overflow-hidden rounded-full bg-white px-8 text-black shadow-[0_0_30px_rgba(255,255,255,0.2)] transition hover:scale-[1.03] hover:bg-gray-200">
-                <span className="flex items-center gap-2.5 text-sm font-bold"><Play className="h-4 w-4 fill-current" />{resumeEpisode ? "Reprendre" : "Regarder"}</span>
-              </button>
-              <button type="button" onClick={() => toggleFav("series", { id: Number(id), name: cleanTitle, poster: basePoster })} className="flex h-12 items-center gap-2.5 rounded-full border border-white/15 bg-black/40 px-6 text-sm font-medium text-white backdrop-blur-xl transition hover:bg-white/15">
-                {fav ? <Heart className="h-4 w-4 fill-[#d8ccff] text-[#d8ccff]" /> : <Plus className="h-4 w-4" />} Ma liste
-              </button>
-            </div>
+          Regarder
+        </button>
+
+        <AnimatePresence
+          initial={false}
+        >
+          {showSeasons &&
+            seasons.length >
+              0 && (
+              <motion.div
+                initial={{
+                  opacity: 0,
+                  scaleX:
+                    0.96,
+                }}
+                animate={{
+                  opacity: 1,
+                  scaleX: 1,
+                }}
+                exit={{
+                  opacity: 0,
+                  scaleX:
+                    0.96,
+                }}
+                transition={{
+                  duration:
+                    0.2,
+                }}
+                className="
+                  min-w-0
+                  flex-1
+                  overflow-hidden
+                  origin-left
+                "
+              >
+                <div
+                  className={cn(
+                    `
+                    flex
+                    min-w-0
+                    items-center
+                    overflow-x-auto
+                    overflow-y-hidden
+                    [scrollbar-width:none]
+                    [&::-webkit-scrollbar]:hidden
+                    `,
+
+                    compact
+                      ? "gap-1"
+                      : "gap-1.5"
+                  )}
+                  style={{
+                    WebkitOverflowScrolling:
+                      "touch",
+
+                    touchAction:
+                      "pan-x",
+
+                    overscrollBehaviorX:
+                      "contain",
+                  }}
+                >
+                  {seasons.map(
+                    (
+                      season
+                    ) => {
+                      const active =
+                        activeSeasonKey ===
+                        season;
+
+                      const number =
+                        season.replace(
+                          /\D/g,
+                          ""
+                        ) ||
+                        season;
+
+                      return (
+                        <button
+                          key={
+                            season
+                          }
+                          type="button"
+                          onClick={() =>
+                            handleSeasonSelect(
+                              season
+                            )
+                          }
+                          className={cn(
+                            `
+                            shrink-0
+                            rounded-full
+                            border
+                            font-semibold
+                            transition
+                            active:scale-[.96]
+                            `,
+
+                            compact
+                              ? "h-[29px] min-w-[42px] px-2 text-[5.5px]"
+                              : mode ===
+                                  "portrait"
+                                ? "h-9 min-w-[54px] px-3 text-[9px]"
+                                : "h-10 min-w-[62px] px-3 text-[9px]",
+
+                            active
+                              ? `
+                                border-[#d8ccff]/55
+                                bg-[#d8ccff]/18
+                                text-[#e8e0ff]
+                                shadow-[0_6px_20px_rgba(170,145,255,.12)]
+                              `
+                              : `
+                                border-white/15
+                                bg-[#111118]/80
+                                text-white/72
+                                hover:border-white/25
+                                hover:text-white
+                              `
+                          )}
+                        >
+                          S
+                          {
+                            number
+                          }
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+              </motion.div>
+            )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  /* =======================================================
+     EPISODES
+
+     IMPORTANT :
+     ceci vit DANS le panneau Movie.
+     Pas en dessous de la page.
+  ======================================================= */
+
+  const renderEpisodes =
+    () => (
+      <div className="absolute inset-0 flex min-h-0 flex-col bg-[#08080c]/96">
+        {/* HEADER */}
+
+        <div
+          className="
+            flex
+            shrink-0
+            items-center
+            justify-between
+            border-b
+            border-white/[0.08]
+            px-3
+            py-2
+            sm:px-4
+          "
+        >
+          <div className="min-w-0">
+            <p className="text-[6px] font-semibold uppercase tracking-[0.18em] text-[#d8ccff]/80 sm:text-[8px]">
+              {activeSeasonKey
+                ? `Saison ${
+                    activeSeasonKey.replace(
+                      /\D/g,
+                      ""
+                    ) ||
+                    activeSeasonKey
+                  }`
+                : "Épisodes"}
+            </p>
+
+            <p className="mt-0.5 truncate text-[8px] font-semibold text-white/90 sm:text-[10px]">
+              {cleanTitle}
+            </p>
           </div>
 
-          <div ref={playerSectionRef} className="w-full lg:w-[45%] xl:w-[650px] 2xl:w-[750px] shrink-0 sticky top-24 h-fit mt-8 lg:mt-0">
-            <div className="group relative aspect-video w-full overflow-hidden rounded-[24px] border border-white/10 bg-[#07070a] shadow-[0_30px_80px_rgba(0,0,0,0.6)]">
-              <AnimatePresence mode="wait">
-                
-                {/* BIO DU DIRECTEUR - LE NOM ATTEND QUE TMDB SOIT PRÊT */}
-                {playerMode === "director" && (
-                  <motion.div key="director-view" initial={{ opacity: 0, filter: "blur(10px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0, filter: "blur(10px)" }} transition={blurTransition} className="absolute inset-0">
-                    <DirectorShowcase name={finalDirectorName} backdrop={backdrop || currentPoster} isTmdbLoading={isTmdbLoading} />
-                  </motion.div>
-                )}
-                
-                {playerMode === "episodes" && (
-                  <motion.div key="episodes-view" initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }} animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }} exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }} transition={blurTransition} className="absolute inset-0 flex flex-col bg-[#07070a]">
-                    <img src={selectedSeasonPoster || backdrop || currentPoster} className="absolute inset-0 h-full w-full object-cover opacity-15 mix-blend-screen saturate-50 blur-xl" alt="" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#07070a] via-[#07070a]/90 to-[#07070a]/80" />
-                    <div className="relative z-10 flex items-center justify-between p-4 border-b border-white/[0.08]">
-                      <div><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#d8ccff]/70">Sélectionnez un épisode</p><h2 className="text-lg font-bold text-white mt-0.5">Saison {selectedSeasonNumber}</h2></div>
-                      <button onClick={() => setPlayerMode("director")} className="grid h-8 w-8 place-items-center rounded-full bg-white/5 hover:bg-white/15 transition border border-white/10"><X className="h-4 w-4 text-white/70" /></button>
-                    </div>
-                    <div ref={epListRef} onMouseDown={handleEpMouseDown} onMouseMove={handleEpMouseMove} onMouseUp={handleEpMouseUp} onMouseLeave={handleEpMouseUp} className="relative z-10 flex-1 overflow-y-auto p-4 space-y-2.5 scrollbar-none cursor-grab active:cursor-grabbing" style={{ WebkitOverflowScrolling: "touch" }}>
-                      {episodes.map((ep: Episode) => {
-                        const num = ep.episode_num || (ep as any).episode;
-                        const episodeTitle = cleanName(ep.title || `Épisode ${num}`).replace(/\s*\(\d{4}\)/g, "").replace(/\s*\[\d{4}\]/g, "").trim();
-                        const resume = progress[`series:${ep.id}`]?.position ?? 0;
-                        const durSecs = parseDurationToSeconds((ep.info as any)?.duration_secs) || parseDurationToSeconds((ep.info as any)?.duration);
-                        const percent = durSecs > 0 ? Math.min(100, (resume / durSecs) * 100) : 0;
-                        const synopsis = (ep.info as any)?.plot || (ep.info as any)?.overview || (ep.info as any)?.description || "Synopsis non renseigné.";
+          <button
+            type="button"
+            onClick={() => {
+              setPlayerMode(
+                "director"
+              );
 
-                        return (
-                          <div key={ep.id} onClick={() => { if (epDrag.current.didDrag) return; setActiveEpisode(ep); setPlayerMode("playing"); }} className="group flex gap-3.5 p-2.5 rounded-[16px] bg-white/[0.03] border border-white/5 hover:bg-white/[0.08] hover:border-white/15 cursor-pointer transition-all">
-                            <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-[10px] bg-black">
-                              <EpisodeImage ep={ep} seriesTitle={cleanTitle} tmdbId={tmdbId} seasonKey={activeSeasonKey || "1"} fallbackCover={backdrop || currentPoster} />
-                              <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent flex items-center justify-center transition-all"><Play className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-lg" /></div>
-                              {percent > 0 && <div className="absolute left-0 right-0 bottom-0 h-1 bg-white/20"><div style={{ width: `${percent}%` }} className="h-full bg-gradient-to-r from-[#aa95ff] to-white" /></div>}
-                            </div>
-                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                              <h4 className="text-sm font-semibold text-white/90 truncate pointer-events-none"><span className="text-white/40 mr-1.5">{num}.</span>{episodeTitle}</h4>
-                              <div className="mt-1 flex items-center gap-2 text-[10px] text-white/40 pointer-events-none">
-                                {durSecs > 0 && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDuration(durSecs)}</span>}
-                                {resume > 15 && <><span className="text-white/20">•</span><span className="text-[#d8ccff]/80">En cours</span></>}
-                              </div>
-                              <p className="mt-1.5 text-[11px] leading-snug text-white/40 line-clamp-2 pointer-events-none">{synopsis}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-                {playerMode === "playing" && activeEpisode && (
-                  <motion.div key="video-player" initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }} animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }} exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }} transition={blurTransition} className="absolute inset-0 z-20 flex flex-col bg-black">
-                    <div className="absolute inset-x-0 top-0 z-30 flex h-16 items-center justify-between bg-gradient-to-b from-black/95 to-transparent px-5 opacity-0 transition-opacity duration-300 hover:opacity-100">
-                      <span className="truncate pr-4 text-sm font-medium text-white/90 drop-shadow-md">{cleanTitle} - S{selectedSeasonNumber}E{activeEpisode.episode_num || (activeEpisode as any).episode}</span>
-                      <div className="flex gap-3">
-                        <button type="button" onClick={handleFullscreen} className="text-white/70 transition hover:text-white"><Maximize className="h-5 w-5" /></button>
-                        <button type="button" onClick={() => setPlayerMode("episodes")} className="text-white/70 transition hover:text-white"><X className="h-6 w-6" /></button>
-                      </div>
-                    </div>
-                    <div className="relative z-20 h-full w-full" ref={playerContainerRef} onClick={handleDoubleTap}>
-                      <VideoPlayer key={activeEpisode.id} sources={[`/api/stream-vod?type=series&id=${activeEpisode.id}&ext=${activeEpisode.container_extension || "mkv"}`]} ext={activeEpisode.container_extension || "mkv"} isLive={false} mediaType="series" title={cleanName(activeEpisode.title || `${cleanTitle} · S${selectedSeasonNumber}E${activeEpisode.episode_num || (activeEpisode as any).episode}`)} poster={activeEpisode.info?.movie_image || backdrop || currentPoster} knownDuration={activeEpisodeDuration} startTime={activeResumePosition > 15 ? activeResumePosition : 0} />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
+              setActiveEpisode(
+                null
+              );
+            }}
+            className="
+              grid
+              h-6
+              w-6
+              shrink-0
+              place-items-center
+              rounded-full
+              border
+              border-white/12
+              bg-black/35
+              text-white/65
+              transition
+              hover:text-white
+              sm:h-7
+              sm:w-7
+            "
+            aria-label="Fermer les épisodes"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
 
-        {/* =================================================
-            BANDE CASTING & PRODUCTION EN BAS
-        ================================================= */}
-        {castList.length > 0 && (
-          <CastingShowcase actors={castList} movieLogo={logoUrl || currentPoster} studio={studioName} studioLogo={productionLogoUrl} companies={companies} producers={producers} />
+        {/* LIST */}
+
+        <div
+          ref={
+            epListRef
+          }
+          onMouseDown={
+            handleEpMouseDown
+          }
+          onMouseMove={
+            handleEpMouseMove
+          }
+          onMouseUp={
+            handleEpMouseUp
+          }
+          onMouseLeave={
+            handleEpMouseUp
+          }
+          className="
+            min-h-0
+            flex-1
+            cursor-grab
+            overflow-y-auto
+            overscroll-contain
+            px-2
+            py-2
+            active:cursor-grabbing
+            [scrollbar-width:none]
+            [&::-webkit-scrollbar]:hidden
+            sm:px-3
+          "
+          style={{
+            WebkitOverflowScrolling:
+              "touch",
+          }}
+        >
+          {episodes.length >
+          0 ? (
+            <div className="flex flex-col gap-1.5 sm:gap-2">
+              {episodes.map(
+                (
+                  episode:
+                    any,
+                  index:
+                    number
+                ) => {
+                  const episodeNumber =
+                    episode
+                      ?.episode_num ||
+                    episode
+                      ?.episode ||
+                    index +
+                      1;
+
+                  const episodeTitle =
+                    cleanName(
+                      episode
+                        ?.title ||
+                        `Épisode ${episodeNumber}`
+                    );
+
+                  const resume =
+                    progress[
+                      `series:${episode.id}`
+                    ]
+                      ?.position ??
+                    0;
+
+                  return (
+                    <button
+                      key={
+                        episode.id ||
+                        `${activeSeasonKey}-${index}`
+                      }
+                      type="button"
+                      draggable={
+                        false
+                      }
+                      onClick={() =>
+                        handleEpisodeSelect(
+                          episode
+                        )
+                      }
+                      className="
+                        group
+                        flex
+                        w-full
+                        shrink-0
+                        items-center
+                        gap-2
+                        rounded-[10px]
+                        border
+                        border-white/[0.07]
+                        bg-white/[0.025]
+                        p-1.5
+                        text-left
+                        transition
+                        hover:border-[#d8ccff]/25
+                        hover:bg-white/[0.055]
+                        sm:gap-3
+                        sm:rounded-[12px]
+                        sm:p-2
+                      "
+                    >
+                      {/* EPISODE IMAGE */}
+
+                      <div
+                        className="
+                          relative
+                          aspect-video
+                          w-[72px]
+                          shrink-0
+                          overflow-hidden
+                          rounded-[7px]
+                          bg-[#111118]
+                          sm:w-[105px]
+                          md:w-[120px]
+                        "
+                      >
+                        <EpisodeImage
+                          ep={
+                            episode
+                          }
+                          seriesTitle={
+                            cleanTitle
+                          }
+                          tmdbId={
+                            tmdbId
+                          }
+                          seasonKey={
+                            activeSeasonKey ||
+                            "1"
+                          }
+                          fallbackCover={
+                            backdrop ||
+                            currentPoster ||
+                            undefined
+                          }
+                        />
+
+                        <div className="absolute inset-0 bg-black/10 transition group-hover:bg-black/0" />
+
+                        <div
+                          className="
+                            absolute
+                            inset-0
+                            grid
+                            place-items-center
+                            opacity-0
+                            transition
+                            group-hover:opacity-100
+                          "
+                        >
+                          <span className="grid h-6 w-6 place-items-center rounded-full bg-white text-black shadow-lg sm:h-8 sm:w-8">
+                            <Play className="ml-[1px] h-2.5 w-2.5 fill-current sm:h-3 sm:w-3" />
+                          </span>
+                        </div>
+
+                        {resume >
+                          15 && (
+                          <div className="absolute inset-x-1 bottom-1 h-[2px] overflow-hidden rounded-full bg-white/20">
+                            <div
+                              className="h-full rounded-full bg-[#d8ccff]"
+                              style={{
+                                width:
+                                  "35%",
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* INFO */}
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[5px] font-semibold uppercase tracking-[0.16em] text-[#d8ccff]/75 sm:text-[7px]">
+                          Épisode{" "}
+                          {
+                            episodeNumber
+                          }
+                        </p>
+
+                        <p className="mt-0.5 line-clamp-1 text-[7px] font-semibold text-white/92 sm:text-[10px] md:text-[11px]">
+                          {
+                            episodeTitle
+                          }
+                        </p>
+
+                        {episode
+                          ?.info
+                          ?.plot && (
+                          <p className="mt-1 line-clamp-1 text-[5px] leading-relaxed text-white/40 sm:text-[7px]">
+                            {
+                              episode
+                                .info
+                                .plot
+                            }
+                          </p>
+                        )}
+                      </div>
+
+                      <Play className="mr-1 h-3 w-3 shrink-0 text-white/25 transition group-hover:text-[#d8ccff] sm:h-4 sm:w-4" />
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          ) : (
+            <div className="grid h-full place-items-center text-[8px] text-white/35">
+              Aucun
+              épisode
+              disponible.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+  /* =======================================================
+     PLAYER
+     EXACTEMENT UN PANNEAU
+
+     director
+       ↓
+     episodes
+       ↓
+     VideoPlayer
+  ======================================================= */
+
+  const renderPlayer =
+    () => (
+      <div
+        ref={
+          playerContainerRef
+        }
+        className="
+          group
+          relative
+          h-full
+          w-full
+          overflow-hidden
+          rounded-[20px]
+          border
+          border-white/[0.12]
+          bg-[#060608]
+          shadow-[0_20px_65px_rgba(0,0,0,.45)]
+        "
+      >
+        <AnimatePresence
+          initial={false}
+          mode="wait"
+        >
+          {playerMode ===
+          "director" ? (
+            <motion.div
+              key="director"
+              initial={{
+                opacity: 0,
+              }}
+              animate={{
+                opacity: 1,
+              }}
+              exit={{
+                opacity: 0,
+              }}
+              transition={{
+                duration:
+                  0.18,
+              }}
+              className="absolute inset-0"
+            >
+              <DirectorShowcase
+                portrait={
+                  screenMode ===
+                  "portrait"
+                }
+                name={
+                  finalDirectorName
+                }
+                backdrop={
+                  backdrop ||
+                  null
+                }
+                onPlay={
+                  handleWatch
+                }
+              />
+            </motion.div>
+          ) : playerMode ===
+            "episodes" ? (
+            <motion.div
+              key={`episodes-${activeSeasonKey}`}
+              initial={{
+                opacity: 0,
+              }}
+              animate={{
+                opacity: 1,
+              }}
+              exit={{
+                opacity: 0,
+              }}
+              transition={{
+                duration:
+                  0.18,
+              }}
+              className="absolute inset-0"
+            >
+              {renderEpisodes()}
+            </motion.div>
+          ) : activeEpisode ? (
+            <motion.div
+              key={`playing-${activeEpisode.id}`}
+              initial={{
+                opacity: 0,
+              }}
+              animate={{
+                opacity: 1,
+              }}
+              exit={{
+                opacity: 0,
+              }}
+              transition={{
+                duration:
+                  0.18,
+              }}
+              className="absolute inset-0"
+            >
+<VideoPlayer
+  onFullscreenChange={
+    setFullscreen
+  }
+  sources={[
+    `${
+      appleLiteMode
+        ? "/api/vod-hls"
+        : "/api/stream-vod"
+    }?type=series&id=${encodeURIComponent(
+      String(
+        activeEpisode.id
+      )
+    )}&ext=${encodeURIComponent(
+      activeEpisode.container_extension ||
+        "mkv"
+    )}`,
+  ]}
+                ext={
+                  activeEpisode.container_extension ||
+                  "mkv"
+                }
+                isLive={
+                  false
+                }
+                mediaType="series"
+                title={cleanName(
+                  activeEpisode.title ||
+                    `${cleanTitle} · S${selectedSeasonNumber}E${
+                      (
+                        activeEpisode as any
+                      )
+                        .episode_num ||
+                      (
+                        activeEpisode as any
+                      )
+                        .episode ||
+                      ""
+                    }`
+                )}
+                titleLogo={
+                  logoUrl ||
+                  undefined
+                }
+                poster={
+                  (
+                    activeEpisode as any
+                  ).info
+                    ?.movie_image ||
+                  backdrop ||
+                  currentPoster ||
+                  undefined
+                }
+                resumeData={{
+                  id:
+                    activeEpisode.id,
+
+                  seriesId:
+                    id,
+
+                  season:
+                    selectedSeasonNumber,
+
+                  episode:
+                    (
+                      activeEpisode as any
+                    )
+                      .episode_num ||
+                    (
+                      activeEpisode as any
+                    )
+                      .episode ||
+                    null,
+
+                  image:
+                    basePoster ||
+                    currentPoster ||
+                    backdrop ||
+                    null,
+
+                  title:
+                    cleanTitle,
+                }}
+                knownDuration={
+                  activeEpisodeDuration
+                }
+                startTime={
+                  activeResumePosition >
+                  15
+                    ? activeResumePosition
+                    : 0
+                }
+                onBack={
+                  handleClosePlayer
+                }
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    );
+
+  /* =======================================================
+     DESKTOP
+     SQUELETTE MOVIES
+  ======================================================= */
+
+  const renderDesktop =
+    () => (
+      <div className="relative h-full min-h-0">
+        <div
+          className="
+            relative
+            z-10
+            mx-auto
+            flex
+            h-full
+            min-h-0
+            w-full
+            max-w-[1700px]
+            flex-col
+            justify-center
+            gap-[30px]
+            px-8
+            pb-[62px]
+            pt-[76px]
+          "
+        >
+          {/* HERO */}
+
+          <div
+            className="
+              grid
+              w-full
+              shrink-0
+              grid-cols-[190px_minmax(0,1fr)_minmax(500px,44%)]
+              items-start
+              gap-9
+            "
+          >
+            {/* COVER */}
+
+            <div className="relative aspect-[2/3] w-full overflow-hidden rounded-[22px] border border-white/[0.13] bg-[#0c0c10] shadow-[0_24px_70px_rgba(0,0,0,.45)]">
+              {currentPoster && (
+                <img
+                  src={
+                    currentPoster
+                  }
+                  alt={
+                    cleanTitle
+                  }
+                  draggable={
+                    false
+                  }
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={
+                  handleFavorite
+                }
+                className="absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-black/60"
+              >
+                <Heart
+                  className={cn(
+                    "h-4 w-4",
+
+                    fav &&
+                      "fill-[#d8ccff] text-[#d8ccff]"
+                  )}
+                />
+              </button>
+            </div>
+
+            {/* INFO */}
+
+            <div className="min-w-0">
+              <div className="flex min-h-[108px] items-start">
+                {logoUrl ? (
+                  <img
+                    src={
+                      logoUrl
+                    }
+                    alt={
+                      cleanTitle
+                    }
+                    draggable={
+                      false
+                    }
+                    className="max-h-[108px] max-w-[95%] object-contain object-left-top drop-shadow-[0_12px_26px_rgba(0,0,0,.55)]"
+                  />
+                ) : (
+                  <h1 className="text-5xl font-semibold leading-[.94] tracking-[-.05em]">
+                    {
+                      cleanTitle
+                    }
+                  </h1>
+                )}
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-[10px] font-medium text-white/80">
+                {rating >
+                  0 && (
+                  <span className="flex items-center gap-1 text-[#d8ccff]">
+                    <Star className="h-3.5 w-3.5 fill-current" />
+
+                    {rating.toFixed(
+                      1
+                    )}
+                  </span>
+                )}
+
+                {year && (
+                  <span>
+                    • {year}
+                  </span>
+                )}
+
+                {genreText && (
+                  <span>
+                    •{" "}
+                    {
+                      genreText
+                    }
+                  </span>
+                )}
+              </div>
+
+              {finalSynopsis && (
+                <p className="mt-5 line-clamp-4 max-w-2xl text-[12px] font-medium leading-[1.65] text-white/78">
+                  {
+                    finalSynopsis
+                  }
+                </p>
+              )}
+
+              {producers.length >
+                0 && (
+                <div className="mt-5 flex flex-wrap gap-x-7 gap-y-2 border-t border-white/[0.08] pt-4">
+                  {producers
+                    .slice(
+                      0,
+                      3
+                    )
+                    .map(
+                      (
+                        producer,
+                        index
+                      ) => (
+                        <div
+                          key={`${producer.id || producer.name}-${index}`}
+                        >
+                          <p className="text-[9px] font-semibold text-white">
+                            {
+                              producer.name
+                            }
+                          </p>
+
+                          <p className="mt-1 text-[5.5px] uppercase tracking-[0.18em] text-[#d8ccff]/75">
+                            {producer.job ||
+                              "Production"}
+                          </p>
+                        </div>
+                      )
+                    )}
+                </div>
+              )}
+
+              {/* REGARDER + SAISONS */}
+
+              <div className="mt-5 min-w-0">
+                {renderSeasonActions(
+                  "desktop"
+                )}
+              </div>
+            </div>
+
+            {/* PLAYER */}
+
+            <div className="aspect-video w-full">
+              {renderPlayer()}
+            </div>
+          </div>
+
+          {/* CASTING */}
+
+<div className="h-[118px] w-full shrink-0">
+  <CastingShowcase
+    actors={castList}
+    movieLogo={logoUrl || currentPoster}
+    studio={studioName}
+    studioLogo={productionLogoUrl}
+    companies={companies}
+    producers={producers}
+    appleLiteMode={appleLiteMode}
+  />
+</div>
+        </div>
+      </div>
+    );
+
+  /* =======================================================
+     PORTRAIT
+     SQUELETTE MOVIES
+  ======================================================= */
+
+  const renderPortrait =
+    () => (
+      <div
+        className="
+          relative
+          h-full
+          min-h-0
+          overflow-y-auto
+          overscroll-y-contain
+        "
+        style={{
+          WebkitOverflowScrolling:
+            "touch",
+        }}
+      >
+        <div
+          className="
+            flex
+            min-h-full
+            flex-col
+            gap-3
+            px-3
+            pb-3
+            pt-4
+          "
+        >
+          {/* HERO */}
+
+          <div
+            className="
+              grid
+              min-h-[156px]
+              shrink-0
+              grid-cols-[29%_minmax(0,1fr)]
+              items-center
+              gap-3
+            "
+          >
+            {/* COVER */}
+
+            <div className="flex h-full min-h-0 items-center">
+              <div className="relative aspect-[2/3] max-h-full w-full overflow-hidden rounded-[15px] border border-white/12 bg-[#0b0b10] shadow-[0_18px_45px_rgba(0,0,0,.35)]">
+                {currentPoster && (
+                  <img
+                    src={
+                      currentPoster
+                    }
+                    alt={
+                      cleanTitle
+                    }
+                    draggable={
+                      false
+                    }
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleFavorite
+                  }
+                  className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-full border border-white/20 bg-black/70"
+                >
+                  <Heart
+                    className={cn(
+                      "h-3.5 w-3.5",
+
+                      fav &&
+                        "fill-[#d8ccff] text-[#d8ccff]"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* INFO */}
+
+            <div className="flex h-full min-w-0 flex-col justify-center pt-3">
+              <div className="flex min-h-[68px] w-full items-center">
+                {logoUrl ? (
+                  <img
+                    src={
+                      logoUrl
+                    }
+                    alt={
+                      cleanTitle
+                    }
+                    draggable={
+                      false
+                    }
+                    className="block max-h-[82px] max-w-full object-contain object-left drop-shadow-[0_10px_24px_rgba(0,0,0,.70)]"
+                  />
+                ) : (
+                  <h1 className="text-[clamp(24px,7vw,38px)] font-semibold leading-[.92] tracking-[-.04em] text-white">
+                    {
+                      cleanTitle
+                    }
+                  </h1>
+                )}
+              </div>
+
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg bg-[#111118]/90 px-2 py-1 text-[11px] font-medium text-white/95">
+                {rating >
+                  0 && (
+                  <span className="shrink-0 text-[#d8ccff]">
+                    ★{" "}
+                    {rating.toFixed(
+                      1
+                    )}
+                  </span>
+                )}
+
+                {year && (
+                  <span className="shrink-0 text-white/85">
+                    • {year}
+                  </span>
+                )}
+
+                {genreText && (
+                  <span className="text-white/95">
+                    •{" "}
+                    {
+                      genreText
+                    }
+                  </span>
+                )}
+              </div>
+
+              {/* REGARDER + SAISONS */}
+
+              <div className="mt-3 min-w-0">
+                {renderSeasonActions(
+                  "portrait"
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* PLAYER */}
+
+          <div className="h-[clamp(170px,24dvh,260px)] min-h-0 shrink-0">
+            {renderPlayer()}
+          </div>
+
+          {/* SYNOPSIS */}
+
+          {!actorOpen && (
+            <section
+              aria-label="Synopsis"
+              className="
+                h-[128px]
+                shrink-0
+                overflow-y-auto
+                overscroll-contain
+                rounded-[15px]
+                border
+                border-white/15
+                bg-[#09090e]/[0.94]
+                p-3
+                shadow-[0_12px_35px_rgba(0,0,0,.28)]
+              "
+            >
+              <p className="text-[13px] font-medium leading-relaxed text-white/95">
+                {
+                  finalSynopsis
+                }
+              </p>
+            </section>
+          )}
+
+          {/* CASTING */}
+
+          <div
+            className={cn(
+              "flex flex-1 flex-col",
+
+              actorOpen
+                ? "min-h-[300px]"
+                : "min-h-[160px]"
+            )}
+            style={{
+              flexBasis:
+                actorOpen
+                  ? 300
+                  : 160,
+            }}
+          >
+            {castList.length >
+              0 && (
+              <CastingShowcase
+                portraitCompact
+                appleLiteMode={
+                  appleLiteMode
+                }
+                actors={
+                  castList
+                }
+                movieLogo={
+                  logoUrl ||
+                  currentPoster
+                }
+                studio={
+                  studioName
+                }
+                studioLogo={
+                  productionLogoUrl
+                }
+                companies={
+                  companies
+                }
+                producers={
+                  producers
+                }
+                onActorOpenChange={
+                  setActorOpen
+                }
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
+  /* =======================================================
+     LANDSCAPE
+     SQUELETTE MOVIES EXACT :
+     92px | INFO | PLAYER
+     CASTING = 72px EN BAS
+  ======================================================= */
+
+  const renderLandscape =
+    () => (
+      <div className="h-full min-h-0">
+        <div
+          className="
+            grid
+            h-full
+            min-h-0
+            grid-rows-[minmax(0,1fr)_72px]
+            gap-2
+            p-2.5
+          "
+        >
+          {/* TOP */}
+
+          <div
+            className="
+              grid
+              min-h-0
+              grid-cols-[92px_minmax(235px,.98fr)_minmax(300px,1.20fr)]
+              gap-3
+              overflow-hidden
+            "
+          >
+            {/* COVER */}
+
+            <div className="flex min-h-0 items-center">
+              <div className="relative aspect-[2/3] max-h-full w-full overflow-hidden rounded-[12px] border border-white/10 bg-[#0b0b10]">
+                {currentPoster && (
+                  <img
+                    src={
+                      currentPoster
+                    }
+                    alt={
+                      cleanTitle
+                    }
+                    draggable={
+                      false
+                    }
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleFavorite
+                  }
+                  className="absolute bottom-1 right-1 grid h-5 w-5 place-items-center rounded-full bg-black/65"
+                >
+                  <Heart
+                    className={cn(
+                      "h-2.5 w-2.5",
+
+                      fav &&
+                        "fill-[#d8ccff] text-[#d8ccff]"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* INFO */}
+
+            <div className="relative z-20 flex min-w-0 flex-col justify-center">
+              <div className="min-w-0">
+                <div className="flex min-h-[50px] w-full items-center">
+                  {logoUrl ? (
+                    <img
+                      src={
+                        logoUrl
+                      }
+                      alt={
+                        cleanTitle
+                      }
+                      draggable={
+                        false
+                      }
+                      className="block max-h-[54px] max-w-full object-contain object-left drop-shadow-[0_8px_18px_rgba(0,0,0,.65)]"
+                    />
+                  ) : (
+                    <h1 className="text-[22px] font-semibold leading-[.92] tracking-[-.04em] text-white">
+                      {
+                        cleanTitle
+                      }
+                    </h1>
+                  )}
+                </div>
+
+                <div className="mt-1 flex gap-1.5 text-[6px] font-medium text-white/80">
+                  {rating >
+                    0 && (
+                    <span className="text-[#d8ccff]">
+                      ★{" "}
+                      {rating.toFixed(
+                        1
+                      )}
+                    </span>
+                  )}
+
+                  {year && (
+                    <span>
+                      • {year}
+                    </span>
+                  )}
+
+                  {genreText && (
+                    <span className="truncate">
+                      •{" "}
+                      {
+                        genreText
+                      }
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-1.5 line-clamp-3 text-[6.2px] font-medium leading-[1.45] text-white/68">
+                  {
+                    finalSynopsis
+                  }
+                </p>
+
+                {/*
+                  SAISONS SOUS LES INFOS,
+                  TOUJOURS HORIZONTALES AVEC REGARDER.
+                  Aucun bloc vertical.
+                */}
+
+                <div className="mt-2 min-w-0">
+                  {renderSeasonActions(
+                    "landscape"
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* PLAYER */}
+
+            <div className="flex min-h-0 items-center justify-center overflow-hidden">
+              <div className="aspect-video w-full max-h-full">
+                {renderPlayer()}
+              </div>
+            </div>
+          </div>
+
+          {/* CASTING — 72px MOVIES */}
+
+          <div className="h-[72px] min-h-0 overflow-hidden">
+            {castList.length >
+              0 && (
+              <CastingShowcase
+                compactLandscape
+                actors={
+                  castList
+                }
+                movieLogo={
+                  logoUrl ||
+                  currentPoster
+                }
+                studio={
+                  studioName
+                }
+                studioLogo={
+                  productionLogoUrl
+                }
+                companies={
+                  companies
+                }
+                producers={
+                  producers
+                }
+                appleLiteMode={
+                  appleLiteMode
+                }
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
+      /* =======================================================
+     RETURN FINAL
+     UN SEUL SCREEN / UN SEUL PLAYER
+  ======================================================= */
+
+  return (
+    <main
+      className="
+        relative
+        h-full
+        min-h-0
+        w-full
+        min-w-0
+        overflow-hidden
+        bg-[#060608]
+        text-white
+      "
+    >
+      {/* ===================================================
+          BACKGROUND SERIES
+
+          On garde l'effet background Series.
+          On ne remplace PAS ça par le background Movie pur.
+      =================================================== */}
+
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {backdrop && (
+          <>
+            {/* BACKDROP PRINCIPAL */}
+
+            <motion.img
+              key={backdrop}
+              src={backdrop}
+              alt=""
+              draggable={false}
+              initial={{
+                opacity: 0,
+                scale: 1.025,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+              }}
+              transition={{
+                opacity: {
+                  duration: 0.45,
+                },
+                scale: {
+                  duration: 1.1,
+                  ease: "easeOut",
+                },
+              }}
+              className="
+                absolute
+                inset-0
+                h-full
+                w-full
+                object-cover
+                opacity-[0.68]
+              "
+            />
+
+            {/* léger glow du backdrop */}
+
+            <div
+              className="
+                absolute
+                inset-0
+                bg-[radial-gradient(circle_at_72%_32%,rgba(216,204,255,0.07),transparent_36%)]
+              "
+            />
+          </>
         )}
 
+        {/* =================================================
+            GRADIENT GAUCHE
+        ================================================= */}
+
+        <div
+          className="
+            absolute
+            inset-0
+            bg-gradient-to-r
+            from-[#060608]
+            via-[#060608]/86
+            via-[45%]
+            to-black/30
+          "
+        />
+
+        {/* =================================================
+            GRADIENT BAS
+        ================================================= */}
+
+        <div
+          className="
+            absolute
+            inset-0
+            bg-gradient-to-t
+            from-[#060608]/94
+            via-[#060608]/18
+            to-black/35
+          "
+        />
+
+        {/* =================================================
+            VIGNETTE
+        ================================================= */}
+
+        <div
+          className="
+            absolute
+            inset-0
+            shadow-[inset_0_0_120px_rgba(0,0,0,.34)]
+          "
+        />
       </div>
 
-      {seasons.length > 0 && (
-        <section className="mx-auto px-4 mt-8 sm:px-7 lg:hidden">
-          <div className="grid grid-cols-[112px_minmax(0,1fr)] items-end gap-4">
-            <div className="relative aspect-[2/3] overflow-hidden rounded-[20px] border border-white/[0.12] bg-white/[0.03]">
-              {currentPoster && <motion.img key={currentPoster} src={currentPoster} alt={cleanTitle} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 h-full w-full object-cover" />}
-            </div>
-            <SeasonWheel seasons={seasons} activeSeasonKey={activeSeasonKey} onSelect={(season) => { setSeasonKey(season); setPlayerMode("episodes"); scrollToPlayer(); }} />
-          </div>
-        </section>
-      )}
+      {/* ===================================================
+          UN SEUL LAYOUT ACTIF
+
+          desktop   -> renderDesktop()
+          portrait  -> renderPortrait()
+          landscape -> renderLandscape()
+
+          Aucun deuxième layout caché.
+          Aucun deuxième player.
+      =================================================== */}
+
+      {screenMode === "desktop"
+        ? renderDesktop()
+        : screenMode === "portrait"
+          ? renderPortrait()
+          : renderLandscape()}
     </main>
   );
 }
 
+/* =========================================================
+   SERIES SKELETON
+========================================================= */
+
 function SeriesSkeleton() {
   return (
-    <div className="min-h-[100dvh] bg-[#060608] px-4 pt-24 lg:px-12">
-      <div className="flex flex-col lg:flex-row gap-12 max-w-[1900px] mx-auto">
-        <Skeleton className="hidden lg:block h-[300px] w-[185px] shrink-0 rounded-[24px] bg-white/[0.05]" />
-        <div className="flex-1 space-y-6">
-          <Skeleton className="h-16 w-[300px] rounded-[10px] bg-white/[0.05]" />
-          <Skeleton className="h-32 w-full rounded-[10px] bg-white/[0.05]" />
-          <Skeleton className="h-12 w-[180px] rounded-full bg-white/[0.05]" />
+    <main
+      className="
+        relative
+        h-full
+        min-h-0
+        w-full
+        overflow-hidden
+        bg-[#060608]
+        p-3
+        text-white
+        sm:p-4
+      "
+    >
+      {/* BACKGROUND */}
+
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="
+            absolute
+            inset-0
+            bg-[radial-gradient(circle_at_70%_28%,rgba(216,204,255,0.045),transparent_36%)]
+          "
+        />
+
+        <div
+          className="
+            absolute
+            inset-0
+            bg-gradient-to-r
+            from-[#060608]
+            via-[#060608]
+            to-[#09090d]
+          "
+        />
+      </div>
+
+      {/* DESKTOP SKELETON */}
+
+      <div
+        className="
+          relative
+          z-10
+          hidden
+          h-full
+          min-h-0
+          w-full
+          lg:flex
+          lg:flex-col
+          lg:justify-center
+          lg:gap-[30px]
+          lg:px-4
+          lg:pb-[62px]
+          lg:pt-[76px]
+        "
+      >
+        <div
+          className="
+            grid
+            w-full
+            grid-cols-[190px_minmax(0,1fr)_minmax(500px,44%)]
+            items-start
+            gap-9
+          "
+        >
+          {/* COVER */}
+
+          <Skeleton
+            className="
+              aspect-[2/3]
+              w-full
+              rounded-[22px]
+              bg-white/[0.05]
+            "
+          />
+
+          {/* INFO */}
+
+          <div className="min-w-0 pt-1">
+            <Skeleton
+              className="
+                h-[82px]
+                w-[68%]
+                rounded-[18px]
+                bg-white/[0.05]
+              "
+            />
+
+            <div className="mt-4 flex gap-2">
+              <Skeleton className="h-4 w-12 rounded-full bg-white/[0.05]" />
+
+              <Skeleton className="h-4 w-16 rounded-full bg-white/[0.05]" />
+
+              <Skeleton className="h-4 w-24 rounded-full bg-white/[0.05]" />
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <Skeleton className="h-3 w-full rounded-full bg-white/[0.045]" />
+
+              <Skeleton className="h-3 w-[94%] rounded-full bg-white/[0.045]" />
+
+              <Skeleton className="h-3 w-[80%] rounded-full bg-white/[0.045]" />
+            </div>
+
+            <div className="mt-6 flex items-center gap-2">
+              <Skeleton className="h-10 w-[110px] rounded-full bg-white/[0.08]" />
+
+              <Skeleton className="h-10 w-[62px] rounded-full bg-white/[0.05]" />
+
+              <Skeleton className="h-10 w-[62px] rounded-full bg-white/[0.05]" />
+            </div>
+          </div>
+
+          {/* PLAYER */}
+
+          <Skeleton
+            className="
+              aspect-video
+              w-full
+              rounded-[20px]
+              bg-white/[0.05]
+            "
+          />
         </div>
-        <Skeleton className="w-full lg:w-[45%] aspect-video shrink-0 rounded-[24px] bg-white/[0.05]" />
+
+        {/* CASTING */}
+
+        <Skeleton
+          className="
+            h-[118px]
+            w-full
+            rounded-[20px]
+            bg-white/[0.04]
+          "
+        />
       </div>
-      <div className="mt-12 max-w-[1900px] mx-auto">
-        <Skeleton className="h-24 w-full rounded-[24px] bg-white/[0.05]" />
+
+      {/* ===================================================
+          MOBILE / TABLET SKELETON
+      =================================================== */}
+
+      <div
+        className="
+          relative
+          z-10
+          flex
+          h-full
+          min-h-0
+          flex-col
+          gap-3
+          lg:hidden
+
+          portrait:overflow-y-auto
+
+          landscape:grid
+          landscape:grid-rows-[minmax(0,1fr)_72px]
+          landscape:gap-2
+          landscape:overflow-hidden
+        "
+      >
+        {/* PORTRAIT */}
+
+        <div
+          className="
+            grid
+            shrink-0
+            grid-cols-[29%_minmax(0,1fr)]
+            gap-3
+
+            landscape:hidden
+          "
+        >
+          <Skeleton
+            className="
+              aspect-[2/3]
+              w-full
+              rounded-[15px]
+              bg-white/[0.05]
+            "
+          />
+
+          <div className="flex min-w-0 flex-col justify-center gap-3">
+            <Skeleton className="h-[58px] w-[82%] rounded-[14px] bg-white/[0.05]" />
+
+            <Skeleton className="h-6 w-full rounded-[9px] bg-white/[0.05]" />
+
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-[92px] rounded-full bg-white/[0.08]" />
+
+              <Skeleton className="h-9 w-[54px] rounded-full bg-white/[0.05]" />
+            </div>
+          </div>
+        </div>
+
+        <Skeleton
+          className="
+            h-[clamp(170px,24dvh,260px)]
+            shrink-0
+            rounded-[20px]
+            bg-white/[0.05]
+
+            landscape:hidden
+          "
+        />
+
+        <Skeleton
+          className="
+            h-[128px]
+            shrink-0
+            rounded-[15px]
+            bg-white/[0.04]
+
+            landscape:hidden
+          "
+        />
+
+        <Skeleton
+          className="
+            min-h-[160px]
+            flex-1
+            rounded-[15px]
+            bg-white/[0.04]
+
+            landscape:hidden
+          "
+        />
+
+        {/* =================================================
+            LANDSCAPE
+            EXACTEMENT LE MÊME SQUELETTE DE GRILLE
+            92px | INFO | PLAYER
+        ================================================= */}
+
+        <div
+          className="
+            hidden
+            min-h-0
+            grid-cols-[92px_minmax(235px,.98fr)_minmax(300px,1.20fr)]
+            gap-3
+            overflow-hidden
+
+            landscape:grid
+          "
+        >
+          {/* COVER */}
+
+          <div className="flex min-h-0 items-center">
+            <Skeleton
+              className="
+                aspect-[2/3]
+                max-h-full
+                w-full
+                rounded-[12px]
+                bg-white/[0.05]
+              "
+            />
+          </div>
+
+          {/* INFO */}
+
+          <div className="flex min-w-0 flex-col justify-center">
+            <Skeleton
+              className="
+                h-[48px]
+                w-[72%]
+                rounded-[10px]
+                bg-white/[0.05]
+              "
+            />
+
+            <div className="mt-2 flex gap-1">
+              <Skeleton className="h-2 w-7 rounded-full bg-white/[0.05]" />
+
+              <Skeleton className="h-2 w-8 rounded-full bg-white/[0.05]" />
+
+              <Skeleton className="h-2 w-14 rounded-full bg-white/[0.05]" />
+            </div>
+
+            <div className="mt-2 space-y-1">
+              <Skeleton className="h-1.5 w-full rounded-full bg-white/[0.045]" />
+
+              <Skeleton className="h-1.5 w-[92%] rounded-full bg-white/[0.045]" />
+
+              <Skeleton className="h-1.5 w-[76%] rounded-full bg-white/[0.045]" />
+            </div>
+
+            <div className="mt-3 flex gap-1">
+              <Skeleton className="h-[29px] w-[64px] rounded-full bg-white/[0.08]" />
+
+              <Skeleton className="h-[29px] w-[42px] rounded-full bg-white/[0.05]" />
+
+              <Skeleton className="h-[29px] w-[42px] rounded-full bg-white/[0.05]" />
+            </div>
+          </div>
+
+          {/* PLAYER */}
+
+          <div className="flex min-h-0 items-center">
+            <Skeleton
+              className="
+                aspect-video
+                w-full
+                rounded-[20px]
+                bg-white/[0.05]
+              "
+            />
+          </div>
+        </div>
+
+        {/* LANDSCAPE CASTING */}
+
+        <Skeleton
+          className="
+            hidden
+            h-[72px]
+            min-h-0
+            rounded-[14px]
+            bg-white/[0.04]
+
+            landscape:block
+          "
+        />
       </div>
-    </div>
+    </main>
   );
 }
