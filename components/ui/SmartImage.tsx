@@ -32,6 +32,7 @@ export function SmartImage({ src, alt, className = "", rounded = "rounded-xl" }:
       onError={() => setError(true)}
       className={`${rounded} ${className}`}
       loading="lazy"
+      decoding="async"
     />
   );
 }

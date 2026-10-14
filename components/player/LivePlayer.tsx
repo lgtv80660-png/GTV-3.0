@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useRef,
@@ -742,7 +743,7 @@ function normalizeAdResponse(
    COMPONENT
 ========================================================= */
 
-export function LivePlayer({
+function LivePlayerComponent({
   sources,
   ext,
   title,
@@ -1752,8 +1753,9 @@ export function LivePlayer({
       return;
     }
 
-    let cancelled =
-      false;
+    const sessionAbort = new AbortController();
+    let ownedHandle: EngineHandle | null = null;
+    let cancelled = false;
 
     setBuffering(true);
 
@@ -1764,11 +1766,11 @@ export function LivePlayer({
         engineRef.current
           ?.destroy();
 
-        engineRef.current =
-          await attach(
+        ownedHandle = await attach(
             video,
             {
               url: src,
+              signal: sessionAbort.signal,
 
               ext,
 
@@ -1780,8 +1782,11 @@ export function LivePlayer({
         if (
           cancelled
         ) {
+          ownedHandle.destroy();
           return;
         }
+
+        engineRef.current = ownedHandle;
 
         try {
           await video.play();
@@ -1813,6 +1818,7 @@ export function LivePlayer({
 
           if (
             cancelled ||
+            engineRef.current?.kind === "desktop" ||
             !activeVideo ||
             activeVideo
               .readyState >=
@@ -1841,6 +1847,8 @@ export function LivePlayer({
     return () => {
       cancelled =
         true;
+
+      sessionAbort.abort();
 
       clearTimeout(
         watchdog
@@ -1901,6 +1909,7 @@ export function LivePlayer({
 
     const onErr =
       () => {
+        if(engineRef.current?.isRecovering?.())return;
         tryFallback(
           "Erreur de lecture du direct."
         );
@@ -4127,5 +4136,9 @@ export function LivePlayer({
     </div>
   );
 }
+
+// Le panneau football et le reste de la page Live peuvent se mettre à jour sans
+// forcer le lecteur HLS à rerendre tant que ses props ne changent pas.
+export const LivePlayer = memo(LivePlayerComponent);
 
 export default LivePlayer;
